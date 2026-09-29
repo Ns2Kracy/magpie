@@ -1335,7 +1335,8 @@ input.words.rule-match { width: 180px; }
 .lan-address-menu .pm-name { font: 12px var(--code); }
 @media (max-width: 600px) {
   .row.pref.lan-address-row { align-items: flex-start; }
-  .prefs .lan-address-row .val { max-width: calc(100% - 50px); width: 260px; }
+  .row.pref.lan-address-row .who { margin-top: 8px; }
+  .prefs .lan-address-row .val { max-width: calc(100% - 50px); width: 260px; margin-top: 4px; }
   .lan-address-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; width: 100%; }
   .lan-address-controls .segs { grid-column: 1 / -1; justify-self: start; }
   .row.pref .lan-interface, .lan-address-controls .lan-address-text { max-width: none; width: 100%; }
