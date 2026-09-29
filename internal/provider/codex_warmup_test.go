@@ -177,6 +177,39 @@ func TestCodexWarmFailureRetried(t *testing.T) {
 	}
 }
 
+// Codex can report an unused window with a reset a full span away. If a
+// successful request leaves that window untouched, it still needs a retry.
+func TestCodexUnusedFiveHourWindowRetried(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "codex-warmup.json")
+	start := time.Date(2026, 9, 29, 6, 0, 0, 0, time.UTC)
+	f := &fakeWarm{now: start, errs: map[string]error{}}
+	f.ws = map[string][]QuotaWindow{"a@example.com": {{Name: "5 hours", Span: fiveHours, ResetSecs: int64(fiveHours.Seconds())}}}
+	for i := range 10 {
+		f.now = start.Add(time.Duration(i) * 5 * time.Minute)
+		// The backend keeps reporting an unstarted window, rather than a
+		// countdown from the first warm-up.
+		f.run(t, path, "all")
+	}
+	if len(f.sent) != 3 {
+		t.Fatalf("sent %d times in 45 minutes, want initial, 15-minute and 45-minute retries", len(f.sent))
+	}
+	// Once its reset counts down from the first request, stop retrying.
+	f.now = start.Add(50 * time.Minute)
+	reset := start.Add(45*time.Minute + fiveHours)
+	f.ws["a@example.com"][0] = win("5 hours", fiveHours, 0, reset)
+	f.run(t, path, "all")
+	f.now = start.Add(2 * time.Hour)
+	f.run(t, path, "all")
+	if len(f.sent) != 3 {
+		t.Fatalf("retried a running window: %v", f.sent)
+	}
+	f.now = reset.Add(time.Minute)
+	f.run(t, path, "all")
+	if len(f.sent) != 4 {
+		t.Fatalf("did not warm the next reset: %v", f.sent)
+	}
+}
+
 // A warm-up goes to the ChatGPT backend as the gateway's Codex requests
 // do: the account's own sign-in, Codex's instructions, nothing stored.
 func TestCodexWarmRequest(t *testing.T) {

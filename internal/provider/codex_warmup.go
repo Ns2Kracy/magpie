@@ -11,7 +11,8 @@ package provider
 // Once per reset: what it saw and did is kept in codex-warmup.json, so a
 // restart doesn't send it again. A window still not started after one —
 // the read from before it, a request that didn't start it, or warm-ups
-// given up on — is sent another later, each wait twice the last.
+// given up on — is sent another later, each wait twice the last, even if
+// the backend keeps reporting a full window's reset time for an idle one.
 
 import (
 	"bytes"
@@ -129,6 +130,7 @@ func (c codexWarmer) warmNow(ctx context.Context, which, at string) []CodexWarm 
 		prev, next := st[key], map[string]warmWindow{}
 		var due []string
 		onReset, days := map[string]bool{}, map[string]string{}
+		unstarted := map[string]bool{}
 		for _, w := range withExpected(q.Windows, c.expect) {
 			// the weekly windows on their reset while it is on, the 5-hour
 			// ones with "all" and for the day's start
@@ -138,11 +140,13 @@ func (c codexWarmer) warmNow(ctx context.Context, which, at string) []CodexWarm 
 				continue
 			}
 			cur := asOf(w, now)
+			unstarted[w.Name] = idle(cur, now)
 			p, seen := prev[w.Name]
 			n := warmWindow{Used: cur.Used, Warmed: p.Warmed, Daily: p.Daily}
 			if cur.ResetsAt != nil {
 				n.ResetsAt = *cur.ResetsAt
-			} else {
+			}
+			if unstarted[w.Name] {
 				n.Idle, n.Retry = p.Idle, p.Retry // not started yet: it waits on
 			}
 			reset := onItsReset && warmDue(p, seen, cur, now)
@@ -188,7 +192,7 @@ func (c codexWarmer) warmNow(ctx context.Context, which, at string) []CodexWarm 
 				default:
 					n.Pending, n.Failed = true, p.Failed+1
 				}
-				if onReset[name] && !n.Pending && n.ResetsAt.IsZero() && n.Used == 0 {
+				if onReset[name] && !n.Pending && unstarted[name] {
 					// not started as far as is known: another later
 					n.Idle = p.Idle + 1
 					n.Retry = now.Add(min(warmRetry<<min(p.Idle, 8), warmRetryMax))
@@ -275,14 +279,16 @@ func asOf(w QuotaWindow, now time.Time) QuotaWindow {
 // now as cur wants starting: it is unused, and has started over since p —
 // or is seen for the first time. Use falling back is a reset whatever the
 // window says, OpenAI resetting everyone's limits early among them. One
-// whose warm-up failed is still due, and one still not started, its reset
-// never known, is due again once its Retry comes.
+// whose warm-up failed is still due, and one still not started is due
+// again once its Retry comes, even with a reset time reported.
 func warmDue(p warmWindow, seen bool, cur QuotaWindow, now time.Time) bool {
 	switch {
 	case seen && p.Pending:
 		return true
 	case !seen:
 		return idle(cur, now)
+	case p.Idle > 0 && idle(cur, now):
+		return !now.Before(p.Retry)
 	case p.Used-cur.Used >= 1:
 		return true
 	case !p.ResetsAt.IsZero() && !now.Before(p.ResetsAt):
