@@ -102,6 +102,7 @@ const I18N = {
     "Mask secrets": "脱敏密钥",
     "Local network": "局域网",
     "Share on local network": "局域网共享",
+    "Copy {label}": "复制{label}地址",
     "Agents on other computers on this network can use magpie’s models, with the API key below": "同一网络里其他电脑上的 Agent 可以用下面的 API Key 使用 magpie 的模型",
     "This computer has no local network address right now": "这台电脑现在没有局域网地址",
     "OpenAI: {u}/v1 · Anthropic: {u}": "OpenAI：{u}/v1 · Anthropic：{u}",

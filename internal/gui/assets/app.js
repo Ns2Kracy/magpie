@@ -6086,6 +6086,7 @@ function renderRedactRules(s, row) {
 
 // renderLAN: the gateway shared on the local network, for agents on other
 // machines — the addresses they use it at and the key they must send.
+let lanSelectedURL = "", lanProtocol = "openai";
 function renderLAN(s) {
   const box = $("#lanList");
   box.replaceChildren();
@@ -6099,6 +6100,7 @@ function renderLAN(s) {
     val.append(...tools);
     r.append(who, val);
     box.append(r);
+    return r;
   };
   const set = (body) => writingPrefs(api("settings/lan", body)).then((ns) => { prefs = ns; renderSettings(); })
     .catch((e) => { status(t(e.message), "err"); renderSettings(); });
@@ -6107,7 +6109,35 @@ function renderLAN(s) {
   if (!s.lan) return;
   const urls = s.lanURLs || [];
   if (!urls.length) row(t("Address"), t("This computer has no local network address right now"), "");
-  for (const u of urls) row(t("Address"), t("OpenAI: {u}/v1 · Anthropic: {u}", { u }), u, copyBtn(u, t("Address")));
+  else {
+    if (!urls.includes(lanSelectedURL)) lanSelectedURL = urls[0];
+    const controls = el("div", "lan-address-controls");
+    const select = el("select", "lan-interface");
+    select.setAttribute("aria-label", t("Address"));
+    for (const u of urls) {
+      const option = el("option");
+      option.value = u;
+      select.append(option);
+    }
+    select.value = lanSelectedURL;
+    const copyControl = el("span", "lan-copy");
+    const update = () => {
+      const label = lanProtocol === "openai" ? "OpenAI" : "Anthropic";
+      const url = lanSelectedURL + (lanProtocol === "openai" ? "/v1" : "");
+      for (let i = 0; i < urls.length; i++) {
+        select.options[i].textContent = urls[i] + (lanProtocol === "openai" ? "/v1" : "");
+      }
+      select.title = select.selectedOptions[0]?.textContent || url;
+      const button = copyBtn(url, label);
+      button.setAttribute("aria-label", t("Copy {label}", { label }));
+      copyControl.replaceChildren(button);
+    };
+    select.onchange = () => { lanSelectedURL = select.value; update(); };
+    controls.append(segs([["openai", "OpenAI"], ["anthropic", "Anthropic"]], lanProtocol,
+      (v) => { lanProtocol = v; update(); }), select, copyControl);
+    row(t("Address"), "", "", controls).classList.add("lan-address-row");
+    update();
+  }
   const again = el("button", "text", t("New key"));
   again.onclick = () => set({ on: true, newKey: true });
   row(t("API key"), t("Other computers send it as their API key; a new one stops the old from working"),
