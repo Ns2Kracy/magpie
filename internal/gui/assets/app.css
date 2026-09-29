@@ -1324,22 +1324,27 @@ input.words.rule-match { width: 180px; }
 .prefs .val { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; min-width: 0; max-width: 60%; flex: none; }
 .prefs .val code { font-size: 12px; color: var(--fg-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: text; -webkit-user-select: text; padding: 0 6px; }
 .prefs .val .text { padding: 3px 6px; }
+.row.pref.lan-address-row { position: relative; height: 50px; transition: height .28s var(--ease); }
+.row.pref.lan-address-row .who { position: absolute; top: 16px; left: 14px; }
 .prefs .lan-address-row .val { max-width: 64%; }
-.lan-address-controls { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
-.row.pref .lan-interface { flex: 0 1 240px; min-width: 0; max-width: 240px; margin-left: 0; font: 12px var(--code); }
+.lan-address-controls { position: absolute; inset: 0; pointer-events: none; }
+.lan-address-controls > * { position: absolute; pointer-events: auto; }
+.row.pref .proto.pick.lan-interface { top: 13px; right: 40px; width: 240px; max-width: calc(100% - 40px); margin-left: 0; font: 12px var(--code); transition: top .28s var(--ease), background .12s, color .12s; }
 .lan-interface .lan-url { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lan-address-controls .lan-address-text { min-width: 0; max-width: 240px; font: 12px var(--code); }
-.lan-address-controls .segs { flex: none; margin-left: 0; }
-.lan-copy { display: inline-flex; flex: none; }
+.lan-address-controls .lan-address-text { top: 16px; right: 40px; width: 240px; max-width: calc(100% - 40px); font: 12px var(--code); transition: top .28s var(--ease); }
+.lan-address-controls .segs { top: 12px; right: 286px; margin-left: 0; transition: right .28s var(--ease); }
+.lan-copy { top: 14px; right: 12px; display: inline-flex; transition: top .28s var(--ease); }
 .pop.proto-menu.lan-address-menu { width: min(320px, calc(100vw - 16px)); max-height: min(360px, 70vh); overflow-y: auto; }
 .lan-address-menu .pm-name { font: 12px var(--code); }
 @media (max-width: 600px) {
-  .row.pref.lan-address-row { align-items: flex-start; }
-  .row.pref.lan-address-row .who { margin-top: 8px; }
-  .prefs .lan-address-row .val { max-width: calc(100% - 50px); width: 260px; margin-top: 4px; }
-  .lan-address-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; width: 100%; }
-  .lan-address-controls .segs { grid-column: 1 / -1; justify-self: start; }
-  .row.pref .lan-interface, .lan-address-controls .lan-address-text { max-width: none; width: 100%; }
+  .row.pref.lan-address-row { height: 76px; }
+  .lan-address-controls .segs { right: 12px; }
+  .row.pref .proto.pick.lan-interface { top: 44px; }
+  .lan-address-controls .lan-address-text { top: 47px; }
+  .lan-copy { top: 45px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .row.pref.lan-address-row, .row.pref .proto.pick.lan-interface, .lan-address-controls .lan-address-text, .lan-address-controls .segs, .lan-copy { transition: none; }
 }
 /* the community row's way in: Discord's own colour, quiet until hovered */
 .prefs .val .discord {
