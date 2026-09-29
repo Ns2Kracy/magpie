@@ -200,6 +200,9 @@ func TestCodexUnusedFiveHourWindowRetried(t *testing.T) {
 	f.run(t, path, "all")
 	f.now = start.Add(2 * time.Hour)
 	f.run(t, path, "all")
+	f.now = start.Add(2*time.Hour + 5*time.Minute)
+	f.ws["a@example.com"][0] = win("5 hours", fiveHours, 2, reset)
+	f.run(t, path, "all")
 	if len(f.sent) != 3 {
 		t.Fatalf("retried a running window: %v", f.sent)
 	}
