@@ -42,9 +42,9 @@ func (p Provider) Available() []catalog.Model {
 	if live, _, ok := catalog.Live(p.ID); ok {
 		switch p.ID {
 		case "cursor":
-			live = collapseCursorModels(withCursorContexts(live))
+			live = withoutCursorCapacity(collapseCursorModels(withCursorContexts(live)))
 		case "devin":
-			live = withDevinContexts(live)
+			live = withDevinContexts(devinCollapse(live, devinCached(), p.Models))
 		case "antigravity":
 			// after its names are filled in, and so that a family's
 			// levels aren't taken off by a known model of its id
@@ -53,6 +53,9 @@ func (p Provider) Available() []catalog.Model {
 		return catalog.Decorate(live, known)
 	}
 	if signedIn {
+		if p.ID == "devin" { // with the variants the user picked
+			return withDevinContexts(devinCollapse(known, nil, p.Models))
+		}
 		return known
 	}
 	if len(known) == 0 {
@@ -356,6 +359,13 @@ func (p Provider) Known(model string) []string {
 	for _, m := range p.Available() {
 		if m.ID == model {
 			return effortsOf(m)
+		}
+	}
+	// one of Devin's variants an agent was set to, which the list offers as
+	// its family: the one effort its id runs at, whatever effort is asked
+	if p.ID == "devin" {
+		if l := devinEffortOf(model); l != "" {
+			return []string{l}
 		}
 	}
 	return catalog.EffortsOf(model)

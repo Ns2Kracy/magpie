@@ -112,7 +112,7 @@ func TestBedrockRoutes(t *testing.T) {
 				t.Fatalf("upstream: %s %q", c.path, c.model)
 			}
 			if tc.anthropic {
-				if c.head.Get("x-api-key") != "ABSK-test" || c.head.Get("anthropic-version") != "2023-06-01" {
+				if c.head.Get("x-api-key") != "ABSK-test" || c.head.Get("Authorization") != "" || c.head.Get("anthropic-version") != "2023-06-01" {
 					t.Fatalf("headers: %v", c.head)
 				}
 			} else if c.head.Get("Authorization") != "Bearer ABSK-test" {

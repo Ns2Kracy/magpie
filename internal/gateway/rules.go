@@ -441,10 +441,11 @@ func applyRule(hit *RuleHit, ms []provider.Member, cs []candidate, pl planned) (
 
 // ofMember reports whether a candidate is one of the member's keys or
 // accounts: its rest is the provider's id, or that with the key ("#") or
-// the account ("@") after it.
+// the account ("@") after it, for the member's model at the member's
+// effort.
 func ofMember(c candidate, m provider.Member) bool {
 	id := m.Provider.ID
-	return c.model == m.Model && (c.rest == id || strings.HasPrefix(c.rest, id+"#") || strings.HasPrefix(c.rest, id+"@"))
+	return c.model == m.Model && c.effort == m.Effort && (c.rest == id || strings.HasPrefix(c.rest, id+"#") || strings.HasPrefix(c.rest, id+"@"))
 }
 
 // membersImageInput is whether a group request may carry images: the

@@ -369,7 +369,7 @@
       ["mcp", t("MCP servers") + (counts.mcp ? " · " + counts.mcp : "")],
       ["skills", t("Skills") + (counts.skills ? " · " + counts.skills : "")],
       ["rtk", "RTK"],
-    ], tab, (id) => { tab = id; try { localStorage.setItem("magpie.libTab", id); } catch {} render(); page.scrollTop = 0; syncLists(); });
+    ], tab, (id) => { tab = id; try { localStorage.setItem("magpie.libTab", id); } catch {} render(); syncLists(); });
     tabs.classList.add("lib-tabs");
     head.append(tabs, el("span", "grow"));
     const more = button("", "lib-more", () => reveal(lib.dir));

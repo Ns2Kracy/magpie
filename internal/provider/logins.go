@@ -326,18 +326,39 @@ func savedButSignedOut() []Exclusion {
 		if _, ok := liveLogin(a); ok {
 			continue
 		}
-		where, signIn := codexAuthPath(), "codex login"
+		why, signIn := "nothing at "+codexAuthPath(), "codex login"
 		if a == "claude" {
-			where, signIn = claudeCredentialsPath(), "claude, then /login"
+			why, signIn = claudeNotSignedInWhy(), "claude, then /login"
 		}
 		n := "1 account is"
 		if saved[a] > 1 {
 			n = fmt.Sprintf("%d accounts are", saved[a])
 		}
 		out = append(out, Exclusion{Agent: a, SignedOut: true,
-			Why: fmt.Sprintf("%s saved in magpie, but it isn't signed in here (nothing at %s), and they are only offered beside the account it is signed in to. Sign in (%s) with this HOME.", n, where, signIn)})
+			Why: fmt.Sprintf("%s saved in magpie, but it isn't signed in here (%s), and they are only offered beside the account it is signed in to. Sign in (%s) with this HOME.", n, why, signIn)})
 	}
 	return out
+}
+
+// claudeNotSignedInWhy says which of liveLogin's checks found no Claude Code
+// sign-in: its credentials (on a Mac, the keychain first), what
+// `claude auth status` says, or the account's name.
+func claudeNotSignedInWhy() string {
+	c, _, ok := claudeCredential()
+	if !ok {
+		if claudeKeychain {
+			return `no "Claude Code-credentials" in the keychain magpie could read, and nothing at ` + claudeCredentialsPath()
+		}
+		return "nothing at " + claudeCredentialsPath()
+	}
+	user, plan, signedOut := claudeIdentity()
+	if signedOut {
+		return "its credentials are there, but claude auth status says no one is signed in"
+	}
+	if u, _ := claudeSignedInUser(c.OAuth.SubscriptionType, plan, user); u == "" {
+		return "its credentials are there, but neither " + claudeProfilePath() + " nor claude auth status names the account"
+	}
+	return "its sign-in could not be read"
 }
 
 // liveLogin reads the account an agent is signed in to now.
@@ -477,7 +498,8 @@ func Logins(agent string) []Login {
 
 // SwitchLogin signs an agent in to a remembered account. Sessions of the
 // agent that are already running keep the account they started with until
-// they restart.
+// they restart; so does Codex's background app-server, which new Codex
+// sessions attach to (CodexDaemonStale says when it is).
 func SwitchLogin(agent, user string) error {
 	switch agent {
 	case "grok":
@@ -493,6 +515,17 @@ func SwitchLogin(agent, user string) error {
 	case "gemini", "antigravity":
 		return switchGoogleLogin(agent, user)
 	}
+	from, err := switchSavedLogin(agent, user)
+	if err == nil && agent == "codex" && from != "" {
+		noteCodexSwitch(from, user)
+	}
+	return err
+}
+
+// switchSavedLogin puts a Codex or Claude Code account magpie saved into
+// the agent's own store, and answers the account it replaced: "" when there
+// was none, or the agent was on that one already.
+func switchSavedLogin(agent, user string) (from string, _ error) {
 	// not while a saved account is being refreshed: the agent would be
 	// given the refresh token that refresh is spending
 	savedTokenMu.Lock()
@@ -507,13 +540,14 @@ func SwitchLogin(agent, user string) error {
 		}
 	}
 	if target == nil {
-		return fmt.Errorf("no saved %s account %q", agent, user)
+		return "", fmt.Errorf("no saved %s account %q", agent, user)
 	}
 	want := *target
 	if live, ok := liveLogin(agent); ok {
 		if strings.EqualFold(live.User, want.User) {
-			return nil
+			return "", nil
 		}
+		from = live.User
 		// the credentials being replaced, as fresh as the agent has them;
 		// in use still if the one taking over was: it is next in line now
 		live.Seen = time.Now().UTC().Truncate(time.Second)
@@ -524,7 +558,7 @@ func SwitchLogin(agent, user string) error {
 			}
 		}
 		if err := writeLogins(ls); err != nil {
-			return err
+			return "", err
 		}
 	}
 	var err error
@@ -537,11 +571,11 @@ func SwitchLogin(agent, user string) error {
 		err = fmt.Errorf("%s accounts can't be switched", agent)
 	}
 	if err != nil {
-		return err
+		return "", err
 	}
 	loginsSeenAt = time.Time{}
 	forgetAccountCaches()
-	return nil
+	return from, nil
 }
 
 func putClaudeLogin(l savedLogin) error {

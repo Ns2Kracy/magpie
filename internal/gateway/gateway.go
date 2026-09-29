@@ -913,22 +913,23 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request, from provider.Pro
 			}
 		}
 		picked := false // the effort asked for in place of the agent's
-		if effort != "" {
+		if c.effort != "" {
+			// a member fixed at an effort (#189) is asked for it, at the
+			// level its model has nearest, whatever the agent asked or the
+			// turn's pick: even a request that asked for no reasoning
+			attemptBody = withFixedEffort(from, attemptBody, fitLevel(c.effort, c.p.Efforts(c.model)))
+		} else if effort != "" {
 			// the level this model has nearest to the one picked; one whose
 			// levels aren't known isn't asked for more than high, which
 			// every vendor with levels takes
-			level := fitEffort(effort, c.p.Efforts(c.model))
-			if len(c.p.Efforts(c.model)) == 0 && level == "xhigh" {
-				level = "high"
-			}
-			if b := withEffort(from, attemptBody, level); !bytes.Equal(b, attemptBody) {
+			if b := withEffort(from, attemptBody, fitLevel(effort, c.p.Efforts(c.model))); !bytes.Equal(b, attemptBody) {
 				attemptBody, picked = b, true
 			}
 		}
 		// the reasoning the model is asked for, whoever chose it
 		sent = sentEffort(from, attemptBody, c.p, c.model)
 		s.trace.update(tr, func(t *Route) {
-			t.Tries = append(t.Tries, Try{ID: c.rest, Model: c.model, Effort: sent, Picked: picked, Start: began})
+			t.Tries = append(t.Tries, Try{ID: c.rest, Model: c.model, Effort: sent, Picked: picked, Fixed: c.effort, Start: began})
 		})
 		held := false // answered as its vendor did a moment ago, without asking
 		if said, ok := verifyHeld(c.restKey()); ok && last {
@@ -943,7 +944,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request, from provider.Pro
 		if hw.failure != 0 { // the stream failed before any of it was sent
 			call.Status, call.Error = hw.failure, c.p.Name+": "+hw.failMsg
 		}
-		try := Try{ID: c.rest, Model: c.model, Effort: sent, Picked: picked, Start: began, Done: true, Status: call.Status, Millis: time.Since(began).Milliseconds(), Error: call.Error}
+		try := Try{ID: c.rest, Model: c.model, Effort: sent, Picked: picked, Fixed: c.effort, Start: began, Done: true, Status: call.Status, Millis: time.Since(began).Milliseconds(), Error: call.Error}
 		if r.Context().Err() != nil && !hw.ended {
 			// the agent went away: nobody failed, and nobody else is asked
 			call.Status, call.Error = 499, "the agent canceled the request"

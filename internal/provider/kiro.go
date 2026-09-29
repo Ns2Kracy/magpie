@@ -200,11 +200,14 @@ func readKiroIDE() (kiroCred, bool) {
 	return c, true
 }
 
-// readKiro is the sign-in to use: the key saved on the provider, else
-// kiro-cli's, else the IDE's.
+// readKiro is the sign-in to use: the key saved on the provider, else the
+// one made in magpie, else kiro-cli's, else the IDE's.
 func readKiro(key string) (kiroCred, bool) {
 	if key != "" {
 		return kiroCred{access: key, method: "apikey", region: "us-east-1"}, true
+	}
+	if c, ok := readKiroMagpie(); ok {
+		return c, true
 	}
 	if c, ok := readKiroCLI(); ok {
 		return c, true
@@ -253,7 +256,7 @@ func KiroAuthOf(ctx context.Context, key string, stale bool) (KiroAuth, error) {
 	read, ok := readKiro(key)
 	if !ok {
 		kiroAuthCache.ok = false
-		return KiroAuth{}, errors.New("Kiro isn't signed in; sign in with `kiro-cli login` or the Kiro IDE, or save a Kiro API key on the provider")
+		return KiroAuth{}, errors.New("Kiro isn't signed in; add the Kiro subscription in magpie, sign in with `kiro-cli login` or the Kiro IDE, or save a Kiro API key on the provider")
 	}
 	c := kiroAuthCache.cred
 	if !kiroAuthCache.ok || kiroAuthCache.key != key || read.access != c.access || !c.fresh() || stale {

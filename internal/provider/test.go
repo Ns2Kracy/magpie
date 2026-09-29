@@ -189,13 +189,14 @@ func isClaude(id string) bool {
 }
 
 // AuthHeaders is how a request to the vendor proves who it is. Anthropic's
-// own API wants x-api-key alone; compatible vendors take either, so both.
+// own API wants x-api-key alone, and so does Bedrock's, which turns away a
+// request with both (#176); other compatible vendors take either, so both.
 func AuthHeaders(p Provider, proto Protocol) map[string]string {
 	if p.Key == "" {
 		return map[string]string{}
 	}
 	if proto == Anthropic {
-		if strings.HasSuffix(p.Host(), "anthropic.com") {
+		if strings.HasSuffix(p.Host(), "anthropic.com") || p.IsBedrock() {
 			return map[string]string{"x-api-key": p.Key}
 		}
 		return map[string]string{"x-api-key": p.Key, "Authorization": "Bearer " + p.Key}

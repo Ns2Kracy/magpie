@@ -1301,6 +1301,18 @@ function freeBadge(plan) {
   return f;
 }
 
+// contextTag: the small grey 1M by a model that holds a million tokens or
+// more (Cursor's names said it, and no longer do); the usual 128K–400K
+// aren't marked, as nearly every model has one of those; nor is a name
+// that says it itself ("GPT-5.5 Mini (1M)", kept to tell it from another)
+function contextTag(n, name) {
+  if (!(n >= 1e6) || /\b\d+M\b/.test(name || "")) return null;
+  const m = n / 1e6;
+  const tag = el("span", "badge ctx", (Number.isInteger(m) ? m : m.toFixed(1)) + "M");
+  tag.title = t("holds {n} tokens", { n: n.toLocaleString() });
+  return tag;
+}
+
 function renderList() {
   const list = $("#list");
   list.replaceChildren();
@@ -1319,6 +1331,8 @@ function renderList() {
     const own = pick.field.label === "sign-in";
     words.append(el("span", "v", own ? t(o.label || o.value) : o.label || o.value));
     if (o.free || (pick.modelPicker && o.value && namedFree(o.value, o.label))) words.append(freeBadge(o.free));
+    const ctx = contextTag(o.context, o.label);
+    if (ctx) words.append(ctx);
     let note = o.note && o.note !== (o.label || o.value) ? (own ? t(o.note) : o.note) : "";
     if (q && o.group && !note) note = o.group;
     if (note) words.append(el("span", "n", note));
@@ -1885,7 +1899,7 @@ function gatewayModels() {
   // the routing groups first, as the agents' pickers list them
   const out = (providers.gateway.groups || []).map((g) => ({ id: g.id, name: g.name, icons: g.icons, group: true,
     provider: { name: [t("routing group"), g.providers.join(", ")].filter(Boolean).join(" · ") } }));
-  for (const p of providers.providers) for (const m of p.models) if (m.on) out.push({ id: `${p.id}/${m.id}`, name: m.name, provider: p });
+  for (const p of providers.providers) for (const m of p.models) if (m.on) out.push({ id: `${p.id}/${m.id}`, name: m.name, provider: p, context: m.context });
   return out;
 }
 
@@ -2041,6 +2055,8 @@ function renderGatewayModels() {
     const who = el("div", "who");
     const name = el("div", "name", m.id);
     if (namedFree(m.id, m.name)) name.append(freeBadge(false));
+    const ctx = contextTag(m.context, m.name);
+    if (ctx) name.append(ctx);
     who.append(name, el("div", "sub", m.name && m.name !== m.id.split("/")[1] ? `${m.name} · ${m.provider.name}` : m.provider.name));
     row.append(m.group ? stackIcon(m.icons) : icon(m.provider.icon || "generic"), who, copyBtn(m.id, t("Model id")));
     row.title = t("Use this model in the snippets");
@@ -3355,6 +3371,8 @@ function renderModels(p) {
       // or one its vendor names free (#185)
       const free = m.free || namedFree(m.id, m.name);
       if (free) c.append(el("span", "badge free", t("free")));
+      const ctx = contextTag(m.context, m.name);
+      if (ctx) c.append(ctx);
       if (m.default) c.title = `${m.id} · ${m.default}`;
       else if (m.name && m.name !== m.id) c.title = m.id;
       if (free) c.title = (c.title || m.id) + " · " + t(m.free ? "free: it doesn't use the plan's credits" : "free: so its name says");
@@ -3643,6 +3661,8 @@ const SUBS = [
   { agent: "commandcode-plan", name: "Command Code", icon: "commandcode", plans: "Pro · GOAT · Max · Ultra", own: true },
   // devin's credentials.toml keeps one account too
   { agent: "devin", name: "Devin", icon: "devin", plans: "Pro · Enterprise", single: true },
+  // Kiro's own sign-in page (Google, GitHub, Builder ID, Identity Center); kiro-cli's or the IDE's is read too
+  { agent: "kiro", name: "Kiro", icon: "kiro-color", plans: "Free · Pro · Pro+ · Power", single: true },
   // Google's sign-ins; Gemini CLI's own account is read too
   { agent: "gemini", name: "Gemini CLI", icon: "geminicli-color", plans: "Code Assist Standard · Enterprise", own: true },
   // accounts can also come from another tool's export (Antigravity Cockpit, Antigravity Manager, CLIProxyAPI)
@@ -3819,6 +3839,7 @@ function renderAccounts(a) {
     row.append(accountQuota(l.lapsed ? { [l.user]: { error: l.lapsed } } : quota, l.user));
     list.append(row);
   }
+  if (a.agent === "codex" && providers?.codexDaemon) list.append(renderCodexDaemon(providers.codexDaemon));
   if (signing?.agent === a.agent) list.append(renderSigning(sub));
   else {
     const add = el("button", "acc add");
@@ -3838,6 +3859,26 @@ function renderAccounts(a) {
     }
   }
   return list;
+}
+
+// renderCodexDaemon: Codex's background app-server read the sign-in when it
+// started, so after a switch the Codex sessions that attach to it are still
+// on the account before (user) until it restarts. magpie doesn't restart it
+// unasked: that ends the Codex sessions running on it.
+function renderCodexDaemon(user) {
+  const box = el("div", "signing daemon");
+  box.append(el("span", "mark", "!"));
+  const tt = el("span", "tt");
+  tt.append(el("span", "n", t("Codex's background service is still signed in as {user}", { user })),
+    el("span", "s", t("Restart it to use the new account. Running Codex sessions will be interrupted.")));
+  box.append(tt);
+  const later = el("button", "text", t("Later"));
+  later.onclick = () => accountAction("codex/daemon/dismiss", {});
+  const go = el("button", "text primary", t("Restart"));
+  go.title = "codex app-server daemon restart";
+  go.onclick = () => { go.classList.add("busy"); accountAction("codex/daemon/restart", {}, t("Codex's background service restarted")); };
+  box.append(later, go);
+  return box;
 }
 
 // Accounts brought in from another tool's export instead of signing in
@@ -4344,9 +4385,9 @@ function hostOf(u) { try { return new URL(u.includes("://") ? u : "https://" + u
 
 // the sheet opens below the list: it unrolls on the rows' spring and the
 // view goes down with it
-$("#addProvider").onclick = () => {
+$("#addProvider").onclick = (e) => {
   adding = true; editing = null; draft = null; renderProviders();
-  unrollSheet($("#view-providers"), $("#addSheet"));
+  unrollSheet($("#view-providers"), $("#addSheet"), e);
 };
 
 // unrollSheet opens a sheet just drawn at the foot of a view from nothing to
@@ -4357,15 +4398,15 @@ $("#addProvider").onclick = () => {
 // never runs ahead to be held back and jump, nor stops short; and it is
 // the view's own scrollTop, which WebKit animates where it won't a smooth
 // scrollIntoView. The reader scrolling meanwhile has the view from then on.
-function unrollSheet(view, sheet) {
+function unrollSheet(view, sheet, e) {
   const from = view.scrollTop, room = view.scrollHeight - view.clientHeight;
   const to = Math.max(from, Math.min(from + sheet.getBoundingClientRect().top - view.getBoundingClientRect().top - 12, room));
   const h = sheet.offsetHeight;
   // how tall the sheet is when it reaches the view's foot, where the view
   // can start to move: from there the view goes down as it grows
   const x0 = Math.max(0, h - (room - from));
-  scrollOnPurpose(ROW_OPEN.ms + 300);
-  if (!h || matchMedia("(prefers-reduced-motion: reduce)").matches) { view.scrollTop = to; return; }
+  const go = scrollOnPurpose(e, ROW_OPEN.ms + 300); // opened by a click, not by code
+  if (!h || matchMedia("(prefers-reduced-motion: reduce)").matches) { if (go) view.scrollTop = to; return; }
   const pad = getComputedStyle(sheet);
   sheet.style.overflow = "hidden";
   const grow = sheet.animate([
@@ -4378,7 +4419,7 @@ function unrollSheet(view, sheet) {
   }
   let set = from;
   const follow = () => {
-    if (Math.abs(view.scrollTop - set) > 2) return; // the reader took it
+    if (!go || Math.abs(view.scrollTop - set) > 2) return; // the reader took it
     const done = grow.playState === "finished";
     view.scrollTop = Math.round(from + (to - from) * (done ? 1 : Math.min(1, Math.max(0, sheet.offsetHeight - x0) / (h - x0))));
     set = view.scrollTop; // as far as there was room for
@@ -6148,23 +6189,49 @@ function savePrefs(body) {
 // ---------- header / footer ----------
 
 // ---------- where the reader is ----------
-// Each view stays scrolled where the reader put it. Only the reader moves it
-// — the wheel or trackpad, a touch, the keys that scroll, Tab, a drag — or
-// code that says so first with scrollOnPurpose(). Anything else that moves
-// it is put back before it's painted: a part of the page redrawn, and
-// measured while it was briefly shorter, pulls the page up to what was left
-// of it (WebKit has no scroll anchoring), and WebKit scrolls a field it
-// focuses to the middle of the view. Never set a view's scrollTop, or
-// scrollIntoView inside one, without scrollOnPurpose().
-let purposeUntil = 0;
-function scrollOnPurpose(ms = 1000) { purposeUntil = Math.max(purposeUntil, performance.now() + ms); }
+// Two rules keep the page under the reader, held here for every view so no
+// part of the app has to remember them:
+//
+// - A view moves only for the reader: the wheel or trackpad, a touch, the
+//   keys that scroll, Tab, a drag. Anything else that scrolls it is put
+//   back before it's painted: a part redrawn and measured while briefly
+//   shorter pulls the page up to what was left of it (WebKit has no scroll
+//   anchoring), WebKit scrolls a field it focuses to the middle of the view,
+//   and code sets scrollTop.
+// - What the reader clicks stays where it is on the screen while what the
+//   click does redraws around it — the part above it grown or shrunk, the
+//   control itself drawn again, a load come in — till the reader scrolls or
+//   clicks again, or it has settled. A click is never a scroll: a tab, a
+//   filter, a day, a toggle leaves the page where it was. When what it does
+//   leaves the page shorter under it (a list emptied), the view keeps room
+//   at its foot for it to stay, room that goes as the reader scrolls back.
+//
+// Code moves a view only in answer to a click that asks to go somewhere, and
+// shows that with the reader's event: scrollOnPurpose(e). Called without one
+// (from a load, a timer, a helper that other clicks share) it is refused,
+// and whatever scroll follows is put back.
+let purposeUntil = 0, held = null;
+const readerScrolls = (ms) => { purposeUntil = Math.max(purposeUntil, performance.now() + ms); held = null; };
+function scrollOnPurpose(e, ms = 1000) {
+  if (!e?.isTrusted || performance.now() - e.timeStamp > 1000) {
+    console.warn("magpie: a scroll not asked for by the reader was refused");
+    return false;
+  }
+  readerScrolls(ms);
+  return true;
+}
 const SCROLL_KEYS = new Set(["PageUp", "PageDown", "Home", "End", "ArrowUp", "ArrowDown", " "]);
-addEventListener("wheel", () => scrollOnPurpose(250), { capture: true, passive: true });
-addEventListener("touchmove", () => scrollOnPurpose(250), { capture: true, passive: true });
-addEventListener("pointermove", (e) => { if (e.buttons) scrollOnPurpose(250); }, { capture: true, passive: true });
+addEventListener("wheel", () => readerScrolls(250), { capture: true, passive: true });
+addEventListener("touchmove", () => readerScrolls(250), { capture: true, passive: true });
+// a drag, not the tremble of a click
+let downAt = null;
+addEventListener("pointerdown", (e) => { downAt = [e.clientX, e.clientY]; }, { capture: true, passive: true });
+addEventListener("pointermove", (e) => {
+  if (e.buttons && downAt && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) readerScrolls(250);
+}, { capture: true, passive: true });
 addEventListener("keydown", (e) => {
   const typing = e.target.closest?.("input, textarea, select, [contenteditable]");
-  if (e.key === "Tab" || (!typing && SCROLL_KEYS.has(e.key))) scrollOnPurpose(400);
+  if (e.key === "Tab" || (!typing && SCROLL_KEYS.has(e.key))) readerScrolls(400);
 }, true);
 const readerAt = new WeakMap();
 function backToReader(v) {
@@ -6176,13 +6243,71 @@ function backToReader(v) {
   const f = document.activeElement;
   if (f && f !== document.body && v.contains(f)) {
     const r = f.getBoundingClientRect(), b = v.getBoundingClientRect();
-    if (r.bottom > b.bottom || r.top < b.top) { scrollOnPurpose(); f.scrollIntoView({ block: "nearest" }); }
+    if (r.bottom > b.bottom || r.top < b.top) { readerScrolls(1000); f.scrollIntoView({ block: "nearest" }); }
   }
 }
+// Where an element is on the screen in its view. What's held is the element
+// clicked or, once it's gone or hidden (drawn again), the nearest still
+// there of its neighbours, its parents and theirs; one moving as it plays
+// (a row springing open) is passed over, so the page doesn't follow the play.
+const onScreen = (n, v) => n.getBoundingClientRect().top - v.getBoundingClientRect().top;
+const atRest = (n) => n.isConnected && n.offsetParent && !n.getAnimations().some((a) => a.playState === "running");
+// The room is an empty block last in the view (padding at its foot would
+// count in its height only a frame later), put back when a redraw of the
+// view takes it out.
+const room = new WeakMap(); // px kept at a view's foot, past its content
+const roomOf = (v) => (v.querySelector(":scope > .view-room") ? room.get(v) || 0 : 0);
+function setRoom(v, px) {
+  px = Math.max(0, Math.round(px));
+  let r = v.querySelector(":scope > .view-room");
+  if (!px) { r?.remove(); room.delete(v); return; }
+  if (!r) { r = document.createElement("div"); r.className = "view-room"; r.setAttribute("aria-hidden", "true"); }
+  if (r !== v.lastElementChild) v.append(r);
+  r.style.height = px + "px";
+  room.set(v, px);
+}
+// only as much room as keeps the view where it is: none once the content
+// reaches the view's foot again
+function fitRoom(v) {
+  const r = roomOf(v);
+  if (r) setRoom(v, Math.min(r, v.scrollTop + v.clientHeight - (v.scrollHeight - r)));
+}
+function hold(h) {
+  const a = h.chain.find(([n]) => atRest(n));
+  if (!a) return;
+  const v = h.v, d = onScreen(a[0], v) - a[1];
+  if (Math.abs(d) >= 1) {
+    const want = v.scrollTop + d, max = v.scrollHeight - v.clientHeight;
+    if (want > max) setRoom(v, roomOf(v) + want - max);
+    v.scrollTop = want;
+  }
+  fitRoom(v);
+  readerAt.set(v, v.scrollTop);
+}
+let holding = false; // one frame loop, whatever the clicks
+function keepHeld() {
+  const h = held;
+  if (h && (h.v.hidden || performance.now() > h.until)) held = null;
+  if (!held) { holding = false; return; }
+  hold(held);
+  requestAnimationFrame(keepHeld);
+}
+addEventListener("click", (e) => {
+  purposeUntil = 0; // what came before the click (Space pressed on a button, a tremble) is no scroll
+  const v = e.target.closest?.(".view");
+  if (!v || v.hidden) { held = null; return; }
+  const chain = [];
+  for (let n = e.target; n && n !== v; n = n.parentElement) {
+    for (const m of [n, n.previousElementSibling, n.nextElementSibling]) if (m instanceof HTMLElement && m.offsetParent) chain.push([m, onScreen(m, v)]);
+  }
+  held = chain.length ? { v, chain, until: performance.now() + 4000 } : null;
+  if (held && !holding) { holding = true; requestAnimationFrame(keepHeld); }
+}, true);
 for (const v of document.querySelectorAll(".view")) {
   v.addEventListener("scroll", () => {
     if (v.hidden) return;
-    if (performance.now() < purposeUntil) readerAt.set(v, v.scrollTop);
+    if (performance.now() < purposeUntil) { fitRoom(v); readerAt.set(v, v.scrollTop); }
+    else if (held?.v === v) hold(held);
     else backToReader(v);
   }, { passive: true });
 }

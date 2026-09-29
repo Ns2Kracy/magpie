@@ -134,6 +134,10 @@ type providersJSON struct {
 	Presets   []presetJSON   `json:"presets"`
 	Excluded  []excludedJSON `json:"excluded"` // sign-ins magpie found but will not share
 	Gateway   gatewayJSON    `json:"gateway"`
+	// CodexDaemon is the account Codex's background app-server is still
+	// signed in to after Codex was switched to another; "" when none is
+	// left behind (provider.CodexDaemonStale).
+	CodexDaemon string `json:"codexDaemon,omitempty"`
 }
 
 // agentModel is the model an agent is on, as magpie's catalog names it.
@@ -208,7 +212,7 @@ func providerInfo(p provider.Provider, agents []agentUse) providerJSON {
 			// a Cursor subscription is served by the gateway, not an agent magpie configures
 			out.Account.Name, out.Account.Icon = "Cursor CLI", "cursor"
 		} else if a.Agent == "kiro" {
-			// Kiro's sign-in is kiro-cli's or the Kiro IDE's
+			// Kiro's sign-in is magpie's own, kiro-cli's or the Kiro IDE's
 			out.Account.Name, out.Account.Icon = "Kiro", "kiro-color"
 		} else if a.Agent == "antigravity" {
 			out.Account.Name, out.Account.Icon = "Antigravity", "antigravity-color"
@@ -328,6 +332,7 @@ func providersState() providersJSON {
 	} else {
 		s.Gateway.Running, s.Gateway.Window = gateway.Serving()
 	}
+	s.CodexDaemon = provider.CodexDaemonStale()
 	return s
 }
 
@@ -653,6 +658,25 @@ func providerRoutes(mux *http.ServeMux, w Windows) {
 		// an agent on its own models goes through magpie while more of
 		// its accounts are on, and straight to its vendor again once not
 		agent.SyncCatalog()
+		writeJSON(rw, providersState())
+	})
+	// Codex's background app-server, left on the account before a switch:
+	// restarting it (which ends the Codex sessions on it), or letting it be.
+	mux.HandleFunc("POST /api/codex/daemon/{action}", func(rw http.ResponseWriter, r *http.Request) {
+		switch r.PathValue("action") {
+		case "restart":
+			ctx, cancel := context.WithTimeout(r.Context(), time.Minute)
+			defer cancel()
+			if err := provider.RestartCodexDaemon(ctx); err != nil {
+				fail(rw, err)
+				return
+			}
+		case "dismiss":
+			provider.DismissCodexDaemon()
+		default:
+			http.NotFound(rw, r)
+			return
+		}
 		writeJSON(rw, providersState())
 	})
 	// A provider's several keys: add one, put one in use, name or remove it.

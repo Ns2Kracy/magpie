@@ -68,6 +68,7 @@ type signInFlow struct {
 	redirect string
 	srv      *http.Server
 	stop     func() // ends an agent's own login command, when that is the sign-in
+	kiro     *kiroFlow
 	done     chan struct{}
 }
 
@@ -228,6 +229,11 @@ func (s *signInFlow) begin() error {
 		s.mu.Lock()
 		s.st.URL = devinAuthorizeURL + "?" + q.Encode()
 		s.mu.Unlock()
+	case "kiro":
+		// Kiro's sign-in page, as the Kiro IDE opens it
+		if ln, err = startKiroSignIn(s, challenge); err != nil {
+			return err
+		}
 	case "copilot":
 		// GitHub's device code, as Copilot's editors sign in
 		if err := startCopilotSignIn(s); err != nil {
@@ -367,6 +373,10 @@ func (s *signInFlow) finish(out SignInState) bool {
 }
 
 func (s *signInFlow) callback(w http.ResponseWriter, r *http.Request) {
+	if s.kiro != nil {
+		s.kiroCallback(w, r)
+		return
+	}
 	switch r.URL.Path {
 	case "/callback", "/auth/callback", "/oauth2callback", "/oauth-callback":
 	case "/cancel":

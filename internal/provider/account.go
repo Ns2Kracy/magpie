@@ -290,14 +290,28 @@ func readClaudeCredential() (claudeCredentials, claudeCredentialLocation, bool) 
 	if !claudeKeychain {
 		return claudeCredentials{}, claudeCredentialLocation{}, false
 	}
-	out, err := proc.Command("security", "find-generic-password", "-s", "Claude Code-credentials", "-w").Output()
-	if err != nil {
+	// Claude Code reads the item under its account ($USER); by service
+	// alone the keychain may hand back another one — left from an earlier
+	// sign-in — which isn't the sign-in in use
+	account := claudeKeychainAccount()
+	var c claudeCredentials
+	var ok, wasHex bool
+	for _, args := range [][]string{{"-a", account}, nil} {
+		out, err := proc.Command("security", append([]string{"find-generic-password", "-s", "Claude Code-credentials", "-w"}, args...)...).Output()
+		if err != nil {
+			continue
+		}
+		var b []byte
+		b, wasHex = keychainText(bytes.TrimSpace(out))
+		if c, ok = parseClaudeCredentials(b); ok {
+			break
+		}
+	}
+	if !ok {
 		return claudeCredentials{}, claudeCredentialLocation{}, false
 	}
-	b, wasHex := keychainText(bytes.TrimSpace(out))
-	c, ok := parseClaudeCredentials(b)
-	loc := claudeCredentialLocation{keychain: true, account: claudeKeychainAccount()}
-	if ok && wasHex {
+	loc := claudeCredentialLocation{keychain: true, account: account}
+	if wasHex {
 		// written by magpie before it wrote them on one line: Claude Code
 		// reads that hex as no sign-in, so it is written again as it
 		// writes it

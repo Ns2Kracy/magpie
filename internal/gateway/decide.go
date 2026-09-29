@@ -554,3 +554,67 @@ func sentEffort(proto provider.Protocol, body []byte, p provider.Provider, model
 	}
 	return fitEffort(e, p.Efforts(model))
 }
+
+// fitLevel is the level of the model's own nearest the one picked for it
+// (fitEffort); one whose levels aren't known isn't asked for more than
+// high, which every vendor with levels takes.
+func fitLevel(want string, levels []string) string {
+	level := fitEffort(want, levels)
+	if len(levels) == 0 && level == "xhigh" {
+		level = "high"
+	}
+	return level
+}
+
+// withFixedEffort asks a request, in the client's own API, for reasoning
+// at effort — that of a group's member fixed at it (#189) — whatever the
+// agent asked: unlike withEffort, a request that asked for none is asked
+// for it too, and "none" turns reasoning off.
+func withFixedEffort(proto provider.Protocol, body []byte, effort string) []byte {
+	if effort == "" {
+		return body
+	}
+	switch proto {
+	case provider.Chat:
+		return withFields(body, map[string]any{"reasoning_effort": effort})
+	case provider.Responses:
+		var v struct {
+			Reasoning map[string]any `json:"reasoning"`
+		}
+		if json.Unmarshal(body, &v) != nil {
+			return body
+		}
+		if v.Reasoning == nil {
+			v.Reasoning = map[string]any{}
+		}
+		v.Reasoning["effort"] = effort
+		return withFields(body, map[string]any{"reasoning": v.Reasoning})
+	case provider.Anthropic:
+		var v struct {
+			Thinking *struct {
+				Type string `json:"type"`
+			} `json:"thinking"`
+			MaxTokens int `json:"max_tokens"`
+		}
+		if json.Unmarshal(body, &v) != nil {
+			return body
+		}
+		if effort == "none" {
+			return withFields(body, map[string]any{"thinking": map[string]any{"type": "disabled"}})
+		}
+		level := effortOf(effort) // in Anthropic's words: minimal is low
+		if v.Thinking != nil && (v.Thinking.Type == "enabled" || v.Thinking.Type == "adaptive") {
+			return withEffort(proto, body, level)
+		}
+		// asked to think, with room left for the answer
+		budget := budgetOf(level)
+		if v.MaxTokens > 0 {
+			budget = min(budget, v.MaxTokens-1)
+		}
+		if budget < 1024 {
+			return body
+		}
+		return withFields(body, map[string]any{"thinking": map[string]any{"type": "enabled", "budget_tokens": budget}})
+	}
+	return body
+}

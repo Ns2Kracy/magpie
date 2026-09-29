@@ -96,6 +96,12 @@ func accountsCmd(args []string) error {
 			return nil
 		}
 		fmt.Println(green.Render("✓"), id, "is now signed in as", args[3], muted.Render("· sessions already running keep their account until restarted"))
+		if id == "codex" {
+			if was := provider.CodexDaemonStale(); was != "" {
+				fmt.Println(" ", "Codex's background service is still signed in as", was+"; restart it to use", args[3]+":", provider.CodexDaemonRestart)
+				fmt.Println(" ", muted.Render("running Codex sessions will be interrupted"))
+			}
+		}
 		return nil
 	}
 	which, asJSON := "", false

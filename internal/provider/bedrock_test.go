@@ -87,12 +87,13 @@ func TestBedrockPreset(t *testing.T) {
 	}
 }
 
-// A Bedrock key signs the Anthropic endpoint with x-api-key, which Bedrock
-// takes on /anthropic/v1/messages, and chat completions with a Bearer.
+// A Bedrock key signs the Anthropic endpoint with x-api-key alone, since
+// Bedrock turns away a request that also carries a Bearer (#176), and chat
+// completions with a Bearer.
 func TestBedrockAuth(t *testing.T) {
 	p, _ := FromPreset("bedrock")
 	p.Key = "ABSK-key"
-	if h := AuthHeaders(p, Anthropic); h["x-api-key"] != "ABSK-key" {
+	if h := AuthHeaders(p, Anthropic); h["x-api-key"] != "ABSK-key" || len(h) != 1 {
 		t.Fatalf("anthropic: %v", h)
 	}
 	if h := AuthHeaders(p, Chat); h["Authorization"] != "Bearer ABSK-key" {

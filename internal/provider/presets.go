@@ -202,9 +202,11 @@ var presets = []PresetDef{
 	// no SigV4: its runtime serves Claude on Anthropic's messages at
 	// /anthropic/v1/messages and the other models on chat completions at
 	// /openai/v1, each in the region picked. It has no list to ask, so the
-	// models are given: Claude as its global. inference profiles, which
-	// every commercial region routes; one kept in a geography (us., eu.,
-	// apac., jp., au.) is typed in by hand.
+	// models are given: Claude and GPT-6 as their global. inference
+	// profiles, which every commercial region routes (GPT-6 has no in-region
+	// id there), then the in-region ids of the others, which not every
+	// region serves (gpt-oss isn't in ap-southeast-1); one kept in a
+	// geography (us., eu., apac., jp., au.) is typed in by hand.
 	{ID: "bedrock", Name: "Amazon Bedrock", Icon: "bedrock-color", Kind: KindVendor,
 		Chat: bedrockChat("us-east-1"), Anthropic: bedrockAnthropic("us-east-1"),
 		Note:    "Bedrock API key",
@@ -215,6 +217,7 @@ var presets = []PresetDef{
 		Models: []string{"global.anthropic.claude-opus-5-5", "global.anthropic.claude-sonnet-5", "global.anthropic.claude-opus-5",
 			"global.anthropic.claude-fable-5-1", "global.anthropic.claude-opus-4-8", "global.anthropic.claude-opus-4-7",
 			"global.anthropic.claude-haiku-4-5-20251001-v1:0",
+			"global.openai.gpt-6-astra", "global.openai.gpt-6-sol", "global.openai.gpt-6-luna",
 			"openai.gpt-oss-120b-1:0", "openai.gpt-oss-20b-1:0", "qwen.qwen3-coder-480b-a35b-v1:0", "deepseek.v3.2",
 			"moonshotai.kimi-k2.5", "zai.glm-5", "minimax.minimax-m2.5"}},
 	// Ollama's own hosted models: the local server's API, at ollama.com with a key
