@@ -1326,13 +1326,19 @@ input.words.rule-match { width: 180px; }
 .prefs .val .text { padding: 3px 6px; }
 .prefs .lan-address-row .val { max-width: 64%; }
 .lan-address-controls { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
-.lan-interface { flex: 0 1 240px; min-width: 0; height: 26px; padding: 0 7px; border: 0; border-radius: 7px; background: var(--pill); color: var(--fg-2); font: 11.5px var(--code); cursor: default; text-overflow: ellipsis; }
+.row.pref .lan-interface { flex: 0 1 240px; min-width: 0; max-width: 240px; margin-left: 0; font: 12px var(--code); }
+.lan-interface .lan-url { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lan-address-controls .lan-address-text { min-width: 0; max-width: 240px; font: 12px var(--code); }
 .lan-address-controls .segs { flex: none; margin-left: 0; }
 .lan-copy { display: inline-flex; flex: none; }
+.pop.proto-menu.lan-address-menu { width: min(320px, calc(100vw - 16px)); max-height: min(360px, 70vh); overflow-y: auto; }
+.lan-address-menu .pm-name { font: 12px var(--code); }
 @media (max-width: 600px) {
-  .row.pref.lan-address-row { align-items: stretch; flex-direction: column; gap: 4px; }
-  .prefs .lan-address-row .val { max-width: 100%; margin-left: 0; }
-  .lan-address-controls { justify-content: flex-start; width: 100%; }
+  .row.pref.lan-address-row { align-items: flex-start; }
+  .prefs .lan-address-row .val { max-width: calc(100% - 50px); width: 260px; }
+  .lan-address-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; width: 100%; }
+  .lan-address-controls .segs { grid-column: 1 / -1; justify-self: start; }
+  .row.pref .lan-interface, .lan-address-controls .lan-address-text { max-width: none; width: 100%; }
 }
 /* the community row's way in: Discord's own colour, quiet until hovered */
 .prefs .val .discord {
