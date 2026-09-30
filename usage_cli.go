@@ -113,6 +113,18 @@ func usageTo(out io.Writer, args []string) error {
 		return g.ID
 	})
 	table("models", s.Models, func(g stats.Group) string { return g.ID })
+	if len(s.Keys) > 0 {
+		table("API keys", s.Keys, func(g stats.Group) string {
+			name := g.KeyName
+			if name == "" {
+				name = g.KeyID
+			}
+			if name == "" {
+				name = "key not recorded"
+			}
+			return g.Provider + " / " + name
+		})
+	}
 	if len(s.Sessions) > 0 {
 		top := s.Sessions[:min(len(s.Sessions), 10)]
 		head := "sessions"

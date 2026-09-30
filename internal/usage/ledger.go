@@ -31,6 +31,7 @@ type Row struct {
 // session hold Query (any case).
 type Filter struct {
 	Agent  string
+	Key    string // provider#fingerprint; an empty fingerprint selects unattributed calls
 	Failed bool
 	Query  string
 }
@@ -39,11 +40,14 @@ func (f Filter) keeps(r Record) bool {
 	if f.Agent != "" && AgentOf(r.Agent) != f.Agent {
 		return false
 	}
+	if f.Key != "" && r.Provider+"#"+r.KeyID != f.Key {
+		return false
+	}
 	if f.Failed && r.Status < 400 {
 		return false
 	}
 	if q := strings.ToLower(strings.TrimSpace(f.Query)); q != "" {
-		return slices.ContainsFunc([]string{r.Requested, r.Model, r.Served, r.Provider, r.Host, r.Session, r.Effort}, func(s string) bool {
+		return slices.ContainsFunc([]string{r.Requested, r.Model, r.Served, r.Provider, r.Host, r.Session, r.Effort, r.KeyID, r.KeyName}, func(s string) bool {
 			return strings.Contains(strings.ToLower(s), q)
 		})
 	}
@@ -128,7 +132,7 @@ func pricer() func(Record) *catalog.Price {
 // CSVHeader is the ledger's columns, as WriteCSV writes them.
 var CSVHeader = []string{"time", "agent", "requested_model", "provider", "host", "model", "served_model", "swapped",
 	"effort", "input_tokens", "output_tokens", "cache_write_tokens", "cache_read_tokens", "reasoning_tokens",
-	"cost_usd", "duration_ms", "ttft_ms", "status", "error", "session", "kind"}
+	"cost_usd", "duration_ms", "ttft_ms", "status", "error", "session", "kind", "key_id", "key_name"}
 
 // WriteCSV writes rows as CSV, a header first: times in RFC 3339 with
 // their offset, the cost in USD at the effective price (empty when unknown), error
@@ -148,7 +152,7 @@ func WriteCSV(w io.Writer, rows []Row) error {
 		}
 		cw.Write([]string{r.Time.Format(time.RFC3339), r.Agent, r.Requested, r.Provider, r.Host, r.Model, r.Served,
 			strconv.FormatBool(r.Swapped), r.Effort, n(r.Input), n(r.Output), n(r.CacheWrite), n(r.CacheRead), n(r.Reasoning),
-			cost, strconv.FormatInt(r.Millis, 10), ttft, n(r.Status), strconv.FormatBool(r.Status >= 400), r.Session, r.Kind})
+			cost, strconv.FormatInt(r.Millis, 10), ttft, n(r.Status), strconv.FormatBool(r.Status >= 400), r.Session, r.Kind, r.KeyID, r.KeyName})
 	}
 	cw.Flush()
 	return cw.Error()

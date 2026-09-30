@@ -26,8 +26,10 @@ type Record struct {
 	Time     time.Time `json:"t"`
 	Agent    string    `json:"agent"` // magpie agent id, or the client's product name
 	Provider string    `json:"provider"`
-	Host     string    `json:"host,omitempty"` // where the call went: provider.Where then
-	Model    string    `json:"model"`          // the provider's model id
+	Host     string    `json:"host,omitempty"`  // where the call went: provider.Where then
+	KeyID    string    `json:"keyId,omitempty"` // fingerprint of the API key actually used
+	KeyName  string    `json:"keyName,omitempty"`
+	Model    string    `json:"model"` // the provider's model id
 	// Requested is the model id the agent asked for (a magpie alias, a
 	// routing group, provider/model…), and Served the model the vendor's
 	// reply says answered, when it named one: a ledger to set beside the
@@ -263,6 +265,8 @@ type Group struct {
 	ID       string `json:"id"`
 	Provider string `json:"provider,omitempty"` // models only
 	Model    string `json:"model,omitempty"`
+	KeyID    string `json:"keyId,omitempty"`
+	KeyName  string `json:"keyName,omitempty"`
 	// Host is where the calls went, when the provider's id has gone to
 	// more than one place, or elsewhere than the provider goes now: its
 	// calls are then told apart by it, not summed under the id.
@@ -288,6 +292,7 @@ type Summary struct {
 	Series []Point `json:"series"`
 	Agents []Group `json:"agents"`
 	Models []Group `json:"models"`
+	Keys   []Group `json:"keys"`
 	// Sessions are the calls that named their session, by session.
 	Sessions []Group `json:"sessions"`
 }
@@ -308,7 +313,7 @@ func summarize(p Period, now time.Time, recs []Record) Summary {
 		}
 	}
 	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	s := Summary{Period: p, Bucket: "day", Agents: []Group{}, Models: []Group{}, Sessions: []Group{}, Series: []Point{}}
+	s := Summary{Period: p, Bucket: "day", Agents: []Group{}, Models: []Group{}, Keys: []Group{}, Sessions: []Group{}, Series: []Point{}}
 	var n int
 	switch p {
 	case Today:
@@ -364,11 +369,19 @@ func summarize(p Period, now time.Time, recs []Record) Summary {
 		}
 	}
 	goesNow := map[string]string{}
+	keyProviders := map[string]bool{}
 	for _, p := range provider.All() {
 		goesNow[p.ID] = p.Where()
+		keyProviders[p.ID] = p.Account == nil && p.Key != ""
+	}
+	for _, r := range recs {
+		if r.KeyID != "" {
+			keyProviders[r.Provider] = true
+		}
 	}
 	agents := map[string]*Group{}
 	models := map[string]*Group{}
+	keys := map[string]*Group{}
 	sessions := map[string]*Group{}
 	for _, r := range recs {
 		t := r.Time.In(now.Location())
@@ -406,6 +419,16 @@ func summarize(p Period, now time.Time, recs []Record) Summary {
 			models[k] = m
 		}
 		m.add(r, pr)
+		if keyProviders[r.Provider] {
+			id := r.Provider + "#" + r.KeyID
+			g := keys[id]
+			if g == nil {
+				g = &Group{ID: id, Provider: r.Provider, KeyID: r.KeyID}
+				keys[id] = g
+			}
+			g.KeyName = r.KeyName
+			g.add(r, pr)
+		}
 		if r.Session != "" {
 			g := sessions[id+"|"+r.Session]
 			if g == nil {
@@ -434,6 +457,10 @@ func summarize(p Period, now time.Time, recs []Record) Summary {
 	}
 	byTokens(s.Agents)
 	byTokens(s.Models)
+	for _, g := range keys {
+		s.Keys = append(s.Keys, *g)
+	}
+	byTokens(s.Keys)
 	for _, g := range sessions {
 		s.Sessions = append(s.Sessions, *g)
 	}

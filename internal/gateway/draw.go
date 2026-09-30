@@ -219,7 +219,11 @@ func (s *Server) images(edit bool) http.HandlerFunc {
 			code, err = 502, errors.New(model+" drew nothing"+vendorSaid(out.Text))
 			call.Status = code
 		}
-		usage.Append(usage.Record{Time: start, Agent: call.Agent, Provider: p.ID, Host: p.Where(), Model: model, Requested: call.Model,
+		keyID, keyName := "", ""
+		if p.Account == nil && p.Key != "" {
+			keyID, keyName = provider.KeyID(p.Key), p.KeyName
+		}
+		usage.Append(usage.Record{Time: start, Agent: call.Agent, Provider: p.ID, Host: p.Where(), Model: model, Requested: call.Model, KeyID: keyID, KeyName: keyName,
 			Input: out.Input, Output: out.Output, Millis: call.Millis, Status: call.Status, Session: sessionOf(r.Header)})
 		if err != nil {
 			call.Error = err.Error()
