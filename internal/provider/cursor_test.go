@@ -202,6 +202,16 @@ func TestTokenExpiry(t *testing.T) {
 // Cursor's plugin gives each model Cursor's 200K unless the name says 1M;
 // a model known to hold less keeps its own there, as the built-in's list.
 func TestCursorPluginContext(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
+	os.MkdirAll(filepath.Dir(catalog.CachePath()), 0o755)
+	os.WriteFile(catalog.CachePath(), []byte(`{
+	  "openai":{"id":"openai","models":{"gpt-4o":{"id":"gpt-4o","limit":{"context":128000,"output":16384}}}},
+	  "moonshotai":{"id":"moonshotai","models":{"kimi-k2":{"id":"kimi-k2","limit":{"context":131072,"output":16384}}}}}`), 0o644)
+	catalog.Reset()
+	t.Cleanup(catalog.Reset)
 	pp := plugin.Provider{ID: "cursor", Models: []plugin.Model{
 		{ID: "gpt-4o", Name: "GPT-4o", Context: 200_000},
 		{ID: "kimi-k2-high", Name: "Kimi K2", Context: 200_000},

@@ -14,6 +14,7 @@ import (
 func init() {
 	movers[MiMoID] = &mover{
 		pkg:    "@magpie-community/opencode-mimo-auth",
+		min:    "0.1.2", // a failed sign-in says why
 		agents: []string{MiMoID},
 		out: func() ([]Moving, error) {
 			var out []Moving

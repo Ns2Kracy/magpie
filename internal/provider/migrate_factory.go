@@ -13,6 +13,7 @@ import (
 func init() {
 	movers["factory"] = &mover{
 		pkg:    "@magpie-community/opencode-factory-auth",
+		min:    "0.1.2", // a refused renewal a 401 in the caller's shape
 		agents: []string{"factory"},
 		out: func() ([]Moving, error) {
 			ls := factoryLogins()

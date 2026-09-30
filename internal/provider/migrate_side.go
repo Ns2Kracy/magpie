@@ -17,6 +17,7 @@ import (
 func init() {
 	movers["devin"] = &mover{
 		pkg:    "@magpie-community/opencode-devin-auth",
+		min:    "0.1.2", // follows the CLI's key
 		agents: []string{"devin"},
 		out: func() ([]Moving, error) {
 			var out []Moving
@@ -129,6 +130,7 @@ func init() {
 
 	movers[CommandCodePlanID] = &mover{
 		pkg:    "@magpie-community/opencode-commandcode-auth",
+		min:    "0.1.2", // follows the CLI's key
 		agents: []string{CommandCodePlanID},
 		out: func() ([]Moving, error) {
 			var out []Moving
@@ -199,6 +201,7 @@ func init() {
 	// the plugin reads cursor-agent's token as the built-in does.
 	movers["cursor"] = &mover{
 		pkg:    "@magpie-community/opencode-cursor-auth",
+		min:    "0.1.2", // a failed sign-in says why
 		agents: []string{"cursor"},
 		out: func() ([]Moving, error) {
 			if CursorExecutable() == "" || cursorSignedOut() {

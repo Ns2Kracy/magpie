@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -165,8 +166,8 @@ func TestWorkBuddyMover(t *testing.T) {
 }
 
 // ZCode's accounts go as the plugin's sign-in keeps them and come back as
-// they were; ZCode's own goes as a copy while it has a key, and stops the
-// move when it has only ZCode's session, which a copy can't follow.
+// they were; ZCode's own goes marked as ZCode's, for the plugin to read
+// ZCode's sign-in anew, its session alone (the Start Plan) too.
 func TestZCodeMover(t *testing.T) {
 	home := signIn(t)
 	t.Setenv("ZCODE_CREDENTIAL_SECRET", "test-secret")
@@ -221,8 +222,12 @@ func TestZCodeMover(t *testing.T) {
 		"oauth:zai:user_info": zcodeEncrypt(t, `{"user_id":"u1","email":"own@example.com"}`),
 		"zcodejwttoken":       zcodeEncrypt(t, zcodeTestJWT(time.Now().Add(time.Hour))),
 	})
-	if _, err := movers["zcode"].out(); err == nil {
-		t.Fatal("ZCode's session alone moved as a copy")
+	if ms := movingOf(t, "zcode"); !ms["own@example.com"].Own || ms["own@example.com"].Auth["expires"] != int64(0) ||
+		!strings.Contains(str(ms["own@example.com"].Auth["refresh"]), `"source":"zcode"`) {
+		t.Fatalf("ZCode's session alone: %+v", ms["own@example.com"])
+	}
+	if movers["zcode"].min != "0.1.2" {
+		t.Fatalf("the move installs zcode-auth %q, which doesn't read ZCode's own", movers["zcode"].min)
 	}
 	os.Remove(creds)
 	if ms := movingOf(t, "zcode"); len(ms) != 1 {

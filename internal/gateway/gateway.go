@@ -1755,6 +1755,11 @@ func (s *Server) forwardTranslated(ctx context.Context, p provider.Provider, to 
 			r := *req
 			r.CacheKey, req = "", &r
 		}
+		if to == provider.Anthropic && p.IsBedrock() && req.Metadata != nil {
+			// not the plain id Bedrock checks metadata.user_id against (#176)
+			r := *req
+			r.Metadata, req = nil, &r
+		}
 		if want := to == provider.Chat && geminiCompat(p.Host(), model) && s.fits(p.ID, thinkingConfigField, to); want != req.GeminiCompat {
 			r := *req
 			r.GeminiCompat, req = want, &r

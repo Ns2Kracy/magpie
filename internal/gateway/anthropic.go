@@ -74,6 +74,7 @@ type aRequest struct {
 	OutputConfig *struct {
 		Effort string `json:"effort,omitempty"`
 	} `json:"output_config,omitempty"`
+	Metadata json.RawMessage `json:"metadata,omitempty"`
 }
 
 func parseAnthropic(body []byte) (*Request, error) {
@@ -83,6 +84,9 @@ func parseAnthropic(body []byte) (*Request, error) {
 	}
 	r := &Request{Model: a.Model, System: stringOrText(a.System), MaxTokens: a.MaxTokens,
 		Temp: a.Temperature, TopP: a.TopP, Stop: a.StopSequences, Stream: a.Stream}
+	if len(a.Metadata) > 0 && string(a.Metadata) != "null" {
+		r.Metadata = a.Metadata
+	}
 	for _, m := range a.Messages {
 		msg := Message{Role: m.Role}
 		var s string
@@ -382,6 +386,9 @@ func buildAnthropic(r *Request, model string) []byte {
 	out["max_tokens"] = maxTokens
 	if len(r.Stop) > 0 {
 		out["stop_sequences"] = r.Stop
+	}
+	if len(r.Metadata) > 0 {
+		out["metadata"] = r.Metadata
 	}
 	if len(r.Tools) > 0 || r.WebSearch {
 		var tools []map[string]any

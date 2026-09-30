@@ -16,7 +16,7 @@ func init() {
 	for _, w := range []*wbSite{wbCN, wbAI} {
 		movers[w.id] = &mover{
 			pkg:    "@magpie-community/opencode-workbuddy-auth",
-			min:    "0.1.1", // the desktop app's account read where the app keeps it
+			min:    "0.1.3", // the desktop app's account, its refusals explained, free models marked
 			agents: []string{w.id},
 			out: func() ([]Moving, error) {
 				var out []Moving
