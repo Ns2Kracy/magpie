@@ -413,7 +413,8 @@ func (p Provider) Exposed() []catalog.Model {
 	if len(p.Models) > 0 {
 		return pick(p.Models)
 	}
-	if len(avail) <= manyModels {
+	// another magpie's list is already the models its user exposed
+	if len(avail) <= manyModels || p.IsRemoteMagpie() {
 		return avail
 	}
 	// More than an agent's picker wants. Show the first slice of the

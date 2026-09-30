@@ -11,6 +11,9 @@ fixtures. It checks session folder/model filters and the main model picker in
 Chromium and WebKit, including wheel, scrollbar track/thumb, keyboard selection
 and dismissal. It does not start the backend or read local user configuration.
 
+`provider-levels-scroll.test.cjs` keeps the provider editor's scrollable model
+list in place after saving a reasoning level farther down the list.
+
 `click-scroll.test.cjs` holds the rule that a click never moves the page
 (see "where the reader is" in `app.js`): on the Routing page, Live and a day
 picked in turn with the list scrolled to its end; a click whose handler sets
@@ -52,6 +55,13 @@ it and over no other icon (the browser's tooltip put Devin's name on ZCode's
 Z), moves at once to the next icon, and goes on a click, on leaving, and when
 Esc closes the picker; a rail icon focused from the keyboard is named too.
 
+`agent-models-all-hidden.test.cjs` takes every model out of DeepSeek
+Harness's lists with "Hide all" (#356): the line under its name reads
+"Showing 0 / 3 models" (显示 0 / 3 个模型), stays once the list is closed and
+the agents are drawn again from the state, and opens the list again, where
+"Show all" puts them back; no click moves the page. Chromium and WebKit,
+English and Chinese.
+
 `agent-models.test.cjs` opens Codex's model list from the line under its
 name, in Chromium and WebKit, English and Chinese: the line reads "Showing 8 /
 31 models" under the name, opening it moves nothing and puts it on the screen
@@ -62,6 +72,13 @@ folded group, "Shown" keeps one just turned off till the view changes, a
 group's "Show all" comes on hover, "Hide all" at the foot sends every one
 but the model in use, "Show all" there sends none, and Esc or a
 click elsewhere closes it.
+
+`omp-roles.test.cjs` draws omp's subagents, smol and slow roles in Chromium
+and WebKit, English and Chinese: each is a square after the model's picker,
+not a picker of its own, as they follow the model while unset; unset it is
+named "same as model" (「同主模型」), its picker opens on "Same as model" with
+the model beside it, and picked it names the model it is on. OpenCode's
+small model, which doesn't follow the model, stays a picker.
 
 `gateway-fold.test.cjs` folds Connect on the Gateway page with the view
 scrolled: its fields hide, the head keeps the base URL and a copy button, the
@@ -369,6 +386,13 @@ vendor's words are given without the hint the gateway adds, and the hint is
 on its own line in English and Chinese; another 400 gets none, and picking
 the request leaves the page where it is. Chromium and WebKit, API faked.
 
+`routing-shape.test.cjs` opens a group request whose first member answered
+422 because its API couldn't read the request (#350: SuperGrok and Codex's
+additional_tools item) and whose next member answered: the Routing page says
+it went on to the next and that the first doesn't rest, tagged "request not
+understood", in English and Chinese, never "an error another account
+wouldn't fix"; picking the request doesn't move the page. The API is faked.
+
 `s3-sync.test.cjs` sets up sync to an S3 bucket from Settings (#296). It
 works as follows, in English and Chinese:
 
@@ -455,11 +479,41 @@ and says what came of it, Anthropic's `not_limited` in words. The Routing
 page's story names a Claude reset used by itself as Claude's. No click moves
 the page, nothing has a left-border accent; English and Chinese, Chromium and
 WebKit.
+`panel-effort.test.cjs` opens a row in the tray panel whose effort is not one
+of the levels offered (omp at auto, an agent with none set): the slider shows
+it as it is ("auto", "default"; 自动 in Chinese) at a stop of its own, a touch
+there posts nothing — it had shown the lowest level and a touch wrote it —
+and the next stop is the lowest level. Chromium and WebKit.
+
+`claude-effort.test.cjs` checks Claude Code's effort and ultracode by its
+model (#352, #353, #354): Opus 5.5's row has an ultracode square, and Opus
+4.5's and Haiku 4.5's rows don't; Haiku 4.5 has no effort control. With the
+page scrolled, a click on the square posts `ultracode` `on`, lights it and
+says that an open Claude Code session must restart. A second click posts it
+off. Neither click moves the page. In the tray panel, Opus 4.5's slider ends
+at high, and a step posts that level and says the same restart. Chromium and
+WebKit, in English and Chinese, with `/api/plugins` faked.
+
+`remote-magpie.test.cjs` adds a Remote magpie (another computer's magpie,
+shared on its network) from the Add sheet: its tile, the address field with
+its placeholder and a hint on where the other magpie shows its address and
+key; saving without an address says the other magpie's address is needed,
+and saving posts the `remote-magpie` preset with the key and the address as
+typed. OpenAI's editor has no address field. No click moves the page;
+English and Chinese, Chromium and WebKit.
+
+`qoder-cn-tile.test.cjs` checks Qoder CN (#349): the Add sheet has a Qoder CN
+tile beside Qoder's, which is labelled the international site's (qoder.com);
+each tile's title says which accounts it is for, Qoder CN's sign-in warning
+says it takes qoder.cn accounts (Alibaba Cloud or phone number) above Qoder's
+risk note, nothing is asked of the backend until "Sign in anyway", which asks
+for `qoder-cn`, and the click moves nothing; English and Chinese, Chromium and
+WebKit.
 
 With Node.js and Playwright available:
 
 ```sh
-node --test internal/gui/tests/menu-scroll.test.cjs internal/gui/tests/click-scroll.test.cjs internal/gui/tests/panel-fold.test.cjs internal/gui/tests/panel-routing.test.cjs internal/gui/tests/gateway-fold.test.cjs internal/gui/tests/routing-kind.test.cjs internal/gui/tests/balance-fix.test.cjs internal/gui/tests/cli-update.test.cjs internal/gui/tests/login-import.test.cjs internal/gui/tests/agy-launch.test.cjs internal/gui/tests/currency.test.cjs internal/gui/tests/usage-ledger.test.cjs internal/gui/tests/update-check.test.cjs internal/gui/tests/omarchy.test.cjs internal/gui/tests/brand.test.cjs node --test internal/gui/tests/signin-callback.test.cjs internal/gui/tests/routing-steady.test.cjs internal/gui/tests/old-webkit.test.cjs internal/gui/tests/session-terminal.test.cjs internal/gui/tests/text-size.test.cjs internal/gui/tests/zcode-site.test.cjs internal/gui/tests/rail-tip.test.cjs internal/gui/tests/sync-update.test.cjs internal/gui/tests/plugin-signin.test.cjs internal/gui/tests/plugin-market.test.cjs internal/gui/tests/s3-sync.test.cjs internal/gui/tests/routing-wb-refused.test.cjs internal/gui/tests/market-have.test.cjs internal/gui/tests/sessions-today.test.cjs internal/gui/tests/routing-side-calls.test.cjs internal/gui/tests/import-all-skills.test.cjs internal/gui/tests/routing-flood.test.cjs internal/gui/tests/routing-busy.test.cjs internal/gui/tests/own-skill.test.cjs internal/gui/tests/routing-manual.test.cjs internal/gui/tests/tray-usages.test.cjs internal/gui/tests/provider-remove.test.cjs internal/gui/tests/signin-link.test.cjs internal/gui/tests/tray-inuse.test.cjs internal/gui/tests/codex-auto-reset.test.cjs internal/gui/tests/routing-auto-reset.test.cjs internal/gui/tests/claude-resets.test.cjs internal/gui/tests/library-toggle-status.test.cjs internal/gui/tests/library-all.test.cjs internal/gui/tests/routing-reroute-title.test.cjs internal/gui/tests/plain-names.test.cjs
+node --test internal/gui/tests/menu-scroll.test.cjs internal/gui/tests/click-scroll.test.cjs internal/gui/tests/panel-fold.test.cjs internal/gui/tests/panel-routing.test.cjs internal/gui/tests/gateway-fold.test.cjs internal/gui/tests/routing-kind.test.cjs internal/gui/tests/balance-fix.test.cjs internal/gui/tests/cli-update.test.cjs internal/gui/tests/login-import.test.cjs internal/gui/tests/agy-launch.test.cjs internal/gui/tests/currency.test.cjs internal/gui/tests/usage-ledger.test.cjs internal/gui/tests/update-check.test.cjs internal/gui/tests/omarchy.test.cjs internal/gui/tests/brand.test.cjs node --test internal/gui/tests/signin-callback.test.cjs internal/gui/tests/routing-steady.test.cjs internal/gui/tests/old-webkit.test.cjs internal/gui/tests/session-terminal.test.cjs internal/gui/tests/text-size.test.cjs internal/gui/tests/zcode-site.test.cjs internal/gui/tests/rail-tip.test.cjs internal/gui/tests/sync-update.test.cjs internal/gui/tests/plugin-signin.test.cjs internal/gui/tests/plugin-market.test.cjs internal/gui/tests/s3-sync.test.cjs internal/gui/tests/routing-wb-refused.test.cjs internal/gui/tests/routing-shape.test.cjs internal/gui/tests/market-have.test.cjs internal/gui/tests/sessions-today.test.cjs internal/gui/tests/routing-side-calls.test.cjs internal/gui/tests/import-all-skills.test.cjs internal/gui/tests/routing-flood.test.cjs internal/gui/tests/routing-busy.test.cjs internal/gui/tests/own-skill.test.cjs internal/gui/tests/routing-manual.test.cjs internal/gui/tests/tray-usages.test.cjs internal/gui/tests/provider-remove.test.cjs internal/gui/tests/signin-link.test.cjs internal/gui/tests/tray-inuse.test.cjs internal/gui/tests/codex-auto-reset.test.cjs internal/gui/tests/routing-auto-reset.test.cjs internal/gui/tests/claude-resets.test.cjs internal/gui/tests/library-toggle-status.test.cjs internal/gui/tests/library-all.test.cjs internal/gui/tests/routing-reroute-title.test.cjs internal/gui/tests/plain-names.test.cjs internal/gui/tests/panel-effort.test.cjs internal/gui/tests/agent-models-all-hidden.test.cjs internal/gui/tests/omp-roles.test.cjs internal/gui/tests/claude-effort.test.cjs internal/gui/tests/remote-magpie.test.cjs internal/gui/tests/qoder-cn-tile.test.cjs internal/gui/tests/provider-levels-scroll.test.cjs
 ```
 
 If Playwright is installed outside the repository, set `NODE_PATH` to the

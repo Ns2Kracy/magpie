@@ -103,6 +103,11 @@ func StartSignIn(agent string) (SignInState, error) {
 // StartSignInAt is StartSignIn on one of the sites an agent signs in on:
 // ZCode's "zai" (the default) or "bigmodel".
 func StartSignInAt(agent, site string) (SignInState, error) {
+	// one moved onto its plugin signs in there: an account signed in to
+	// here would be the built-in's, which nothing serves now
+	if Moved(agent) {
+		return SignInState{}, fmt.Errorf("%s runs on its plugin: sign in through the plugin (magpie plugin login %s)", agent, agent)
+	}
 	s := &signInFlow{verifier: randomToken(48), state: randomToken(24), done: make(chan struct{}), site: site}
 	s.st = SignInState{ID: randomToken(9), Agent: agent, State: "waiting"}
 	cli, install := missingCLI(agent)
@@ -263,9 +268,10 @@ func (s *signInFlow) begin() error {
 		if err := startCommandCodeSignIn(s); err != nil {
 			return err
 		}
-	case "qoder":
-		// Qoder's device flow, run by magpie and kept in its own store
-		if err := startQoderSignIn(s); err != nil {
+	case "qoder", QoderCNID:
+		// Qoder's device flow on the account's site (qoder.com or qoder.cn),
+		// run by magpie and kept in its own store
+		if err := startQoderSignIn(s, qoderSiteOf(agent)); err != nil {
 			return err
 		}
 	case "zed":

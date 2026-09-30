@@ -487,6 +487,7 @@ async function providers() {
           released: m.release_date ?? "",
           cost: m.cost,
           variants: Object.keys(m.variants ?? {}),
+          free: m.free === true,
         })),
     })
   }
@@ -570,12 +571,19 @@ async function authorize({ provider, method, inputs, account }) {
   return { session, url: a.url ?? "", instructions: a.instructions ?? "", method: a.method }
 }
 
+// failed is a sign-in's failure, with why, where the plugin tells it
+// ({ type: "failed", error: "…" }; OpenCode's own result has no reason).
+function failed(r) {
+  const why = typeof r?.error === "string" ? r.error.trim() : r?.error instanceof Error ? r.error.message : ""
+  return why ? { ok: false, error: why.slice(0, 500) } : { ok: false }
+}
+
 async function callback({ session, code }) {
   const s = sessions.get(session)
   if (!s) throw new Error("no such sign-in")
   sessions.delete(session)
   const r = await inScope(s.provider, s.key, () => (s.a.method === "code" ? s.a.callback(code ?? "") : s.a.callback()))
-  if (!r || r.type !== "success") return { ok: false }
+  if (!r || r.type !== "success") return failed(r)
   return { ok: true, ...save(s.provider, s.key, r, undefined) }
 }
 
@@ -589,7 +597,7 @@ async function apiKey({ provider, method, inputs, key, account }) {
     return { ok: true, provider, account: settle(provider, at) }
   }
   const r = await inScope(provider, at, () => m.authorize(inputs ?? {}))
-  if (!r || r.type !== "success") return { ok: false }
+  if (!r || r.type !== "success") return failed(r)
   return { ok: true, ...save(provider, at, r, inputs, key) }
 }
 

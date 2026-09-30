@@ -182,11 +182,19 @@ func TestZCodeMover(t *testing.T) {
 	own := ms["own@example.com"]
 	var st map[string]any
 	if !own.Own || own.Auth["access"] != "own.secret" || json.Unmarshal([]byte(str(own.Auth["refresh"])), &st) != nil ||
-		st["site"] != "zai" || st["key"] != "own.secret" || st["device"] != zcodeDeviceMid() || st["base"] != ZCodeZaiBase {
+		st["site"] != "zai" || st["key"] != "own.secret" || st["device"] != zcodeDeviceMid() || st["base"] != ZCodeZaiBase || st["source"] != "zcode" {
 		t.Fatalf("ZCode's own: %+v %+v", own, st)
 	}
+	// marked as ZCode's, it comes back as ZCode's own, with nothing saved
+	var ownBack map[string]any
+	_ = json.Unmarshal([]byte(jsonText(own.Auth)), &ownBack)
+	before := len(readLogins())
+	if ls, user, err := movers["zcode"].back(readLogins(), "own@example.com", ownBack); err != nil || len(ls) != before || user != "own@example.com" {
+		t.Fatalf("ZCode's own back: %v %q %+v", err, user, ls)
+	}
 	tm := ms["team@x"]
-	if json.Unmarshal([]byte(str(tm.Auth["refresh"])), &st) != nil || st["site"] != "bigmodel" || st["org"] != "o1" ||
+	st = nil
+	if json.Unmarshal([]byte(str(tm.Auth["refresh"])), &st) != nil || st["source"] != nil || st["site"] != "bigmodel" || st["org"] != "o1" ||
 		st["project"] != "p1" || st["token"] != "biz" || st["plan"] != "Team" || tm.Auth["expires"] != int64(0) {
 		t.Fatalf("team@x: %+v %+v", tm.Auth, st)
 	}

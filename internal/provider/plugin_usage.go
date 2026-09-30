@@ -14,25 +14,27 @@ import (
 	"github.com/yetone/magpie/internal/plugin"
 )
 
-// movedCards are the names and icons the built-ins' usage cards have.
-var movedCards = map[string][2]string{
-	"zed":             {"Zed", "zed"},
-	"qoder":           {"Qoder", "qoder"},
-	"factory":         {"Factory", "factory"},
-	MiMoID:            {"Xiaomi MiMo", "mimocode"},
-	CommandCodePlanID: {"Command Code", "commandcode"},
-	"kiro":            {"Kiro", "kiro-color"},
-	"zcode":           {"ZCode", "zcode"},
-	"workbuddy":       {"WorkBuddy", "workbuddy-color"},
-	"cursor":          {"Cursor", "cursor"},
-	"grok":            {"Grok (SuperGrok)", "xai"},
-	"devin":           {"Devin", "devin"},
+// movedCards are the names and icons the built-ins' usage cards have,
+// and the sites their providers link to.
+var movedCards = map[string]struct{ name, icon, site string }{
+	"zed":             {"Zed", "zed", "https://zed.dev"},
+	"qoder":           {"Qoder", "qoder", "https://qoder.com"},
+	"factory":         {"Factory", "factory", "https://factory.ai"},
+	MiMoID:            {"Xiaomi MiMo", "mimocode", "https://mimo-ai.xiaomimimo.com"},
+	CommandCodePlanID: {"Command Code", "commandcode", cmdStudio},
+	"kiro":            {"Kiro", "kiro-color", "https://kiro.dev"},
+	"zcode":           {"ZCode", "zcode", "https://zcode.z.ai"},
+	"workbuddy":       {"WorkBuddy", "workbuddy-color", "https://www.codebuddy.cn"},
+	WorkBuddyAIID:     {"WorkBuddy AI", "workbuddy-color", "https://www.workbuddy.ai"},
+	"cursor":          {"Cursor", "cursor", "https://cursor.com"},
+	"grok":            {"Grok (SuperGrok)", "xai", "https://x.ai/cli"},
+	"devin":           {"Devin", "devin", "https://devin.ai"},
 }
 
 // pluginCard is the name and icon pp's usage cards show.
 func pluginCard(pp plugin.Provider) (string, string) {
 	if c, ok := movedCards[pp.ID]; ok && Moved(pp.ID) {
-		return c[0], c[1]
+		return c.name, c.icon
 	}
 	name := pp.Name
 	if name == "" {
@@ -76,6 +78,7 @@ func pluginLoginQuota(ctx context.Context, l Login) SubscriptionQuota {
 		q.Error = err.Error()
 		return q
 	}
+	keepPluginPlan(pp, key, u.Plan)
 	return quotaOfPlugin(q, u)
 }
 
@@ -125,12 +128,13 @@ func lowerSet(ids []string) map[string]bool {
 }
 
 // pluginUsageFetches are a card's fetch for each plugin account that
-// tells its allowance.
-func pluginUsageFetches(via func(string) context.Context, hidden map[string]bool) []func() SubscriptionQuota {
+// tells its allowance, but those placed already where their built-in's
+// cards were.
+func pluginUsageFetches(via func(string) context.Context, hidden, placed map[string]bool) []func() SubscriptionQuota {
 	var out []func() SubscriptionQuota
 	for _, pp := range plugin.Cached() {
 		id := PluginID(pp.ID)
-		if hidden[id] {
+		if hidden[id] || placed[pp.ID] {
 			continue
 		}
 		ls := pluginUsageLogins(pp)
@@ -141,6 +145,17 @@ func pluginUsageFetches(via func(string) context.Context, hidden map[string]bool
 		out = append(out, perLogin(via(id), ls, name, icon)...)
 	}
 	return out
+}
+
+// pluginUsageFetchesOf are the cards of the plugin provider id.
+func pluginUsageFetchesOf(via func(string) context.Context, id string) []func() SubscriptionQuota {
+	for _, pp := range plugin.Cached() {
+		if pp.ID == id {
+			name, icon := pluginCard(pp)
+			return perLogin(via(id), pluginUsageLogins(pp), name, icon)
+		}
+	}
+	return nil
 }
 
 // UsageAgent is the agent an account's allowance is asked for by

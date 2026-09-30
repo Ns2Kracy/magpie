@@ -224,7 +224,10 @@ function renderAgents() {
     // so the controls line up down the list
     const fields = el("div", "fields");
     const wide = (f) => f.label === "model" || f.label === "large";
-    const shownFields = a.fields.filter((f) => !TIERS.includes(f.label));
+    // an effort or ultracode the model has none of (Claude Code on Haiku
+    // 4.5, ultracode short of xhigh) isn't drawn at all
+    const none = (f) => (f.key === "effort" || f.key === "ultracode") && !f.options.length && !f.value;
+    const shownFields = a.fields.filter((f) => !TIERS.includes(f.label) && !none(f));
     const tiers = tierMenu(a);
     if (tiers) shownFields.push(tiers);
     const sorted = shownFields.sort((x, y) => wide(y) - wide(x) || extra(x) - extra(y));
@@ -1144,20 +1147,27 @@ function openRowMenu(anchor, acts) {
 // once it runs through magpie. They share one button, which lists the four;
 // picking one opens the model picker for it.
 const TIERS = ["opus", "sonnet", "haiku", "fable"];
-// fields that fall back to the agent's model when unset
-const FOLLOWS_MODEL = [...TIERS, "subagents"];
+// fields that fall back to the agent's model when unset: omp's smol and
+// slow roles take the session's, as its subagents do ("smol", not "small":
+// other agents' small model is a picker of its own)
+const FOLLOWS_MODEL = [...TIERS, "subagents", "smol", "slow"];
 
 // A field that follows the model unless set — Codex's subagents, Claude
-// Code's tiers — is a small square after the pickers rather than a third
-// picker, which a row has no room for: it wrapped onto a line of its own.
-// So is Codex's sign-in, ChatGPT or magpie as its provider.
-const extra = (f) => f.key === "tiers" || FOLLOWS_MODEL.includes(f.label) || f.label === "sign-in";
+// Code's tiers, omp's roles — is a small square after the pickers rather
+// than a third picker, which a row has no room for: it wrapped onto a line
+// of its own. So is Codex's sign-in, ChatGPT or magpie as its provider.
+const extra = (f) => f.key === "tiers" || FOLLOWS_MODEL.includes(f.label) || f.label === "sign-in" || f.key === "ultracode";
 const EXTRA_GLYPH = {
   subagents: "M4.5 2.75v10.5M4.5 9.25c0-2.2 1.6-3.75 3.9-3.75h3.35M9.9 3.6l1.9 1.9-1.9 1.9",
+  // a feather for omp's smol role, an hourglass for its slow one
+  smol: "M12.75 3.25c-4.5 0-8 3.5-8 8v1.5M12.75 3.25c0 4-2.75 7-6.75 7.25M4.75 12.75l-1.5 1.5",
+  slow: "M4.5 2.5h7M4.5 13.5h7M5.25 2.5c0 3 5.5 3 5.5 5.5s-5.5 2.5-5.5 5.5M10.75 2.5c0 3-5.5 3-5.5 5.5s5.5 2.5 5.5 5.5",
   tiers: "M8 2.6 2.75 5.4 8 8.2l5.25-2.8zM2.75 8.1 8 10.9l5.25-2.8M2.75 10.8 8 13.6l5.25-2.8",
   "sign-in": "M8 2.5a2.75 2.75 0 1 1 0 5.5 2.75 2.75 0 0 1 0-5.5zM3 13.5c.4-2.4 2.4-3.9 5-3.9s4.6 1.5 5 3.9",
+  ultracode: "M3 4.25h4M3 8h2.5M3 11.75h4M9.5 4.25l3.5 3.75-3.5 3.75",
 };
 function extraField(a, f) {
+  if (f.key === "ultracode") return ultracodeToggle(a, f);
   const set = !!(f.value || f.custom);
   const b = el("button", "field extra" + (set ? " set" : ""));
   b.append(svg(EXTRA_GLYPH[f.label] || EXTRA_GLYPH.tiers, 13, 1.5));
@@ -1452,6 +1462,30 @@ function placePop(anchor, w, h) {
   pop.style.top = y + "px";
 }
 
+// ultracodeToggle: Claude Code's ultracode as a square that a click turns
+// on or off, lit while on; nothing to pick between. What it does, and that
+// an open session keeps what it started with, is said as it changes.
+function ultracodeToggle(a, f) {
+  const on = f.value === "on";
+  const b = el("button", "field extra" + (on ? " set" : ""));
+  b.append(svg(EXTRA_GLYPH.ultracode, 13, 1.5));
+  b.title = t("{label}: {value}", { label: "ultracode", value: t(on ? "on" : "off") }) + "\n" + t("Claude plans a workflow for each substantive task");
+  b.setAttribute("aria-label", b.title);
+  b.setAttribute("aria-pressed", String(on));
+  b.dataset.key = f.key;
+  b.onclick = async (ev) => {
+    ev.stopPropagation();
+    try {
+      state = await api("set", { agent: a.id, field: f.key, value: on ? "" : "on" });
+      renderAgents();
+      const msg = t("{agent} ultracode → {value}", { agent: a.name, value: t(on ? "off" : "on") });
+      if (state.notice) status(`${msg}. ${t(state.notice)}`, "warn", 9000);
+      else status(msg, "ok");
+    } catch (e) { status(e.message, "err"); }
+  };
+  return b;
+}
+
 // openPicker drops the option list under a field button. `only` narrows the
 // options (the providers page offers one vendor's models at a time).
 function openPicker(agent, field, anchor, ev, only) {
@@ -1536,7 +1570,10 @@ function effortBars(f) {
 // shows at once, bars and all; the write follows, in order, so a slow agent
 // config never holds the thumb (巨卡).
 function effortSeg(a, f) {
-  const options = f.options;
+  // a value that isn't one of the levels (unset, or one magpie doesn't list)
+  // is a stop of its own, as the picker's current value is: shown as the
+  // lowest level, a touch wrote that level over it
+  const options = f.options.some((o) => o.value === f.value) ? f.options : [{ value: f.value }, ...f.options];
   const last = Math.max(1, options.length - 1);
   const box = el("div", "effort-control");
   const head = el("div", "effort-head");
@@ -1562,7 +1599,7 @@ function effortSeg(a, f) {
   ends.setAttribute("aria-hidden", "true");
   ends.append(el("span", "", effortName(options[0])), el("span", "", effortName(options[options.length - 1])));
   box.append(head, track, ends);
-  let at = Math.max(0, options.findIndex((o) => o.value === f.value));
+  let at = options.findIndex((o) => o.value === f.value);
   const show = (i) => {
     at = i;
     track.style.setProperty("--p", i / last);
@@ -1579,7 +1616,7 @@ function effortSeg(a, f) {
     box.closest(".row")?.querySelector(".ag-sum .eff")?.replaceWith(effortBars(f));
     saving = saving.then(async () => {
       state = await api("set", { agent: a.id, field: f.key, value: o.value });
-      status(`${a.name} ${t(f.label)} → ${effortName(o)}`, "ok");
+      effortSaid(a, f, o);
     }).catch((e) => { status(e.message, "err"); renderAgents(); });
   };
   const stopAt = (x) => {
@@ -1606,6 +1643,14 @@ function effortSeg(a, f) {
   };
   show(at);
   return box;
+}
+
+// effortSaid: an effort set, and what the agent says of it, such as that an
+// open Claude Code session keeps the level it started with.
+function effortSaid(a, f, o) {
+  const msg = `${a.name} ${t(f.label)} → ${effortName(o)}`;
+  if (state.notice) status(`${msg}. ${t(state.notice)}`, "warn", 9000);
+  else status(msg, "ok");
 }
 
 function renderEffortPicker() {
@@ -1651,7 +1696,7 @@ function renderEffortPicker() {
     opened.effortSave = (opened.effortSave || Promise.resolve()).then(async () => {
       const next = await api("set", { agent: opened.agent.id, field: opened.field.key, value: option.value });
       state = next;
-      status(`${opened.agent.name} ${t(opened.field.label)} → ${effortName(option)}`, "ok");
+      effortSaid(opened.agent, opened.field, option);
     }).catch((e) => status(e.message, "err"));
   };
   range.onkeydown = (ev) => {
@@ -2283,6 +2328,7 @@ function accountPlan(a) {
   if (a.agent === "workbuddy-ai") return a.plan || "WorkBuddy AI";
   if (a.agent === "commandcode-plan") return "Command Code" + (a.plan ? " " + t(a.plan) : "");
   if (a.agent === "qoder") return "Qoder" + (a.plan ? " " + t(a.plan) : "");
+  if (a.agent === "qoder-cn") return "Qoder CN" + (a.plan ? " " + t(a.plan) : "");
   if (a.agent === "zed") return "Zed" + (a.plan ? " " + t(a.plan) : "");
   if (a.agent === "mimo-app") return "Xiaomi MiMo" + (a.plan ? " " + t(a.plan) : "");
   return t("signed in");
@@ -2852,7 +2898,7 @@ function renderAdd() {
       const w = subs.find((x) => signing?.agent === x.agent);
       if (w) tiles.append(renderSigning(w));
     }
-    const plugged = pluginSubs().filter((x) => !f || x.name.toLowerCase().includes(f) || x.agent.includes(f) || "plugin".includes(f));
+    const plugged = pluginSubs().map((x) => subOf(x.agent)).filter((x) => !f || x.name.toLowerCase().includes(f) || x.agent.includes(f) || "plugin".includes(f));
     if (plugged.length) {
       any = true;
       const grid = section("From plugins", "signed in by an OpenCode plugin");
@@ -3000,6 +3046,7 @@ function subTile(x) {
   const n = have ? (have.account.logins?.length || 1) : 0;
   const b = pickRow(x.icon, shortName(x.name), signing?.agent === x.agent ? " on" : "");
   b.title = t("{name} subscription", { name: x.name }) + " · " + x.plans;
+  if (x.hint) b.title += "\n" + t(x.hint);
   if (n) {
     markAdded(b, x.single ? 1 : n);
     b.title += "\n" + (x.single ? t("Signed in") : t(n === 1 ? "1 account" : "{n} accounts", { n })) + " · " + t(x.single ? "signed in · click to switch account" : "click to add another account");
@@ -3389,6 +3436,9 @@ function openModal(content) {
   const m = $("#modal"), d = m.firstElementChild;
   const fresh = m.hidden || m.classList.contains("out");
   const top = m.hidden ? 0 : d.querySelector(".ebody")?.scrollTop || 0;
+  // Names & levels scrolls inside the editor body, so keep its own position.
+  const names = !fresh && d.querySelector(".mnames:not([hidden])");
+  const namesAt = names && { provider: names.dataset.provider, top: names.scrollTop };
   m.classList.remove("out");
   d.classList.remove("swap");
   if (!fresh) { void d.offsetWidth; d.classList.add("swap"); } // content changed: a soft refresh, not a re-entrance
@@ -3397,6 +3447,8 @@ function openModal(content) {
   m.hidden = false;
   const body = content.querySelector(":scope > .ebody");
   if (body) body.scrollTop = top; // a re-render keeps the place
+  const nextNames = content.querySelector(".mnames:not([hidden])");
+  if (namesAt && nextNames?.dataset.provider === namesAt.provider) nextNames.scrollTop = namesAt.top;
   if (!fresh) return;
   for (const a of [...m.getAnimations(), ...d.getAnimations()]) a.cancel();
   d.style.opacity = d.style.transform = m.style.opacity = "";
@@ -3986,7 +4038,7 @@ function drawEditor(p, presetID) {
     }
     if (isNew && custom && !body.name) { name.focus(); return editorError(t("Give it a name"), "warn"); }
     if (isNew && custom && !body.chat && !body.anthropic && !body.responses) { url.focus(); return editorError(t("A base URL is needed"), "warn"); }
-    if (endpoint && !body.chat && !body.responses) { endpoint.focus(); return editorError(t("Your resource's endpoint is needed"), "warn"); }
+    if (endpoint && !body.chat && !body.responses) { endpoint.focus(); return editorError(t(pr.endpointNeeded || "Your resource's endpoint is needed"), "warn"); }
     editorError("");
     saveBtn.classList.add("busy");
     providerAction("save", body, t(isNew ? "{name} added" : "{name} saved", { name: draft.name || draft.id }));
@@ -4431,6 +4483,7 @@ function renderModels(p) {
   const box = el("div", "models");
   const chips = el("div", "mchips");
   const names = el("div", "mnames");
+  names.dataset.provider = p.id;
   const q = p.models.length > 24 ? input("", t("filter {n} models…", { n: p.models.length })) : null;
   const draw = () => {
     if (agentMenu && chips.contains(agentMenu.anchor)) closeAgentMenu();
@@ -4771,7 +4824,14 @@ const SUBS = [
   // said on X may get an account banned when used from other tools
   { agent: "commandcode-plan", name: "Command Code", icon: "commandcode", plans: "Go · Pro · GOAT · Max · Ultra", own: true, risk: true,
     riskNote: "A Go plan account is used through Command Code's private interface, which Command Code may treat as a breach of its terms and ban the account for. Pro, Max and the other plans use its Provider API. Use a Go account you can afford to lose." },
-  { agent: "qoder", name: "Qoder", icon: "qoder", plans: "Pro", own: true, risk: true,
+  // Qoder's two sites: qoder.com, and Qoder CN (qoder.cn), where accounts made
+  // with Alibaba Cloud or a phone number live and can't sign in on qoder.com;
+  // hint says which accounts each is for
+  { agent: "qoder", get name() { return t("Qoder (international)"); }, icon: "qoder", plans: "Pro", own: true, risk: true,
+    hint: "For accounts on qoder.com, the international site.",
+    riskNote: "Qoder has no public API for this; magpie signs requests as its desktop client would, which Qoder may treat as third-party use and act on. Use an account you can afford to lose." },
+  { agent: "qoder-cn", name: "Qoder CN", icon: "qoder", plans: "Pro", own: true, risk: true,
+    hint: "For accounts on qoder.cn: signed in with an Alibaba Cloud account or a phone number.",
     riskNote: "Qoder has no public API for this; magpie signs requests as its desktop client would, which Qoder may treat as third-party use and act on. Use an account you can afford to lose." },
   // the devin CLI's own account is read; more are signed in beside it, each in a data folder of magpie's
   { agent: "devin", name: "Devin", icon: "devin", plans: "Pro · Enterprise", own: true },
@@ -4791,7 +4851,16 @@ const SUBS = [
   // accounts can also come from another tool's export (Antigravity Cockpit, Antigravity Manager, CLIProxyAPI)
   { agent: "antigravity", name: "Antigravity", icon: "antigravity-color", plans: "Google AI Pro · Ultra · free", risk: true, importable: true },
 ];
-const subOf = (agent) => SUBS.find((x) => x.agent === agent) || pluginSubs().find((x) => x.agent === agent);
+// subOf: the subscription an agent id is. One moved onto its plugin signs
+// in through the plugin, still named, drawn and warned about as it was.
+const subOf = (agent) => {
+  const own = SUBS.find((x) => x.agent === agent);
+  const pl = pluginSubs().find((x) => x.agent === agent);
+  if (own && pl && (providers?.onPlugins || []).includes(agent)) {
+    return { ...pl, name: own.name, icon: own.icon, plans: own.plans, risk: own.risk, riskNote: own.riskNote, single: own.single };
+  }
+  return own || pl;
+};
 
 // pluginSubs: the providers OpenCode plugins sign in to (Settings →
 // Plugins), as subscriptions like the built-in ones. The plugin, not
@@ -4831,13 +4900,13 @@ let justAdded = ""; // the account that just came in, to greet it
 
 async function startSignIn(agent, risky, site) {
   if (signingOpen()) api("signin/" + signing.id + "/cancel", {}).catch(() => {});
-  if (subOf(agent)?.plugin) return startPluginSignIn(subOf(agent));
   // an account Google may suspend is added only once that is said
   if (subOf(agent)?.risk && !risky) {
     signing = { agent, state: "risk" };
     renderProviders();
     return;
   }
+  if (subOf(agent)?.plugin) return startPluginSignIn(subOf(agent));
   // one on more than one site says which first
   if (subOf(agent)?.sites && !site) {
     signing = { agent, state: "site" };
@@ -5098,8 +5167,9 @@ function renderSigning(sub) {
   const tt = el("span", "tt");
   if (signing.state === "risk") {
     box.append(el("span", "mark", "!"));
-    tt.append(el("span", "n", t("{name} accounts can be suspended", { name: sub.name })),
-      el("span", "s", t(sub.riskNote || "Google may suspend an Antigravity account it sees used outside Antigravity. Use one you can afford to lose.")));
+    tt.append(el("span", "n", t("{name} accounts can be suspended", { name: sub.name })));
+    if (sub.hint) tt.append(el("span", "s", t(sub.hint)));
+    tt.append(el("span", "s", t(sub.riskNote || "Google may suspend an Antigravity account it sees used outside Antigravity. Use one you can afford to lose.")));
     box.append(tt);
     const go = el("button", "text primary", t("Sign in anyway"));
     go.onclick = () => startSignIn(sub.agent, true);
@@ -5273,7 +5343,7 @@ function renderAccounts(a) {
     row.append(dot, el("span", "n", l.user), el("span", "plan", accountPlan({ agent: a.agent, plan: l.plan })), el("span", "grow"));
     if (l.active) {
       row.append(el("span", "using", l.paused ? t("Paused") : several ? t("First") : t("Current")));
-      if (a.agent === "qoder" || l.own) {
+      if (a.agent === "qoder" || a.agent === "qoder-cn" || l.own) {
         const forget = el("button", "text quiet", t("Remove"));
         if (l.own) forget.title = forgetOwnTitle(a);
         forget.onclick = () => accountAction("login/forget", { agent: a.agent, user: l.user }, t("{user} removed", { user: l.user }));

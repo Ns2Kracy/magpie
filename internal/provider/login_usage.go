@@ -88,8 +88,8 @@ func builtinLogins(agent string) (logins []Login, ok bool) {
 		logins = wbLoginList(wbSiteOf(agent))
 	case CommandCodePlanID:
 		logins = cmdLoginList()
-	case "qoder":
-		logins = loginsOf(qoderLogins())
+	case "qoder", QoderCNID:
+		logins = loginsOf(qoderLoginsOf(agent))
 	case "zed":
 		logins = zedLoginList()
 	case "factory":
@@ -113,7 +113,7 @@ func loginQuota(ctx context.Context, l Login) SubscriptionQuota {
 	if strings.HasPrefix(l.Agent, "plugin:") {
 		return pluginLoginQuota(ctx, l)
 	}
-	if l.Agent == "qoder" {
+	if l.Agent == "qoder" || l.Agent == QoderCNID {
 		return qoderLoginQuota(ctx, l)
 	}
 	if l.Agent == "zed" {

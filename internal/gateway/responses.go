@@ -132,6 +132,8 @@ type rRequest struct {
 }
 
 func parseResponses(body []byte) (*Request, error) {
+	// Responses Lite's tools, sent as the first input item (#350)
+	body = liftAdditionalTools(body)
 	var q rRequest
 	if err := json.Unmarshal(body, &q); err != nil {
 		return nil, fmt.Errorf("invalid request: %v", err)

@@ -295,6 +295,9 @@ func providerInfo(p provider.Provider, agents []agentUse) providerJSON {
 			// a plugin's sign-in: named for the provider it signs in to,
 			// the page following it by the provider's id
 			out.Account.Agent, out.Account.Name, out.Account.Icon = p.ID, pp.Name, pluginIcon(pp.Spec, pp.ID)
+			if provider.Moved(pp.ID) {
+				out.Account.Icon = p.Icon // the built-in's, as it was
+			}
 			out.Account.Logins = provider.Logins(p.ID)
 			if out.Icon == "" || out.Icon == "generic" {
 				out.Icon = out.Account.Icon

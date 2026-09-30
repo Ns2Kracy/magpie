@@ -383,7 +383,39 @@ func modelObject(e provider.Entry) map[string]any {
 	if e.Output > 0 {
 		m["max_output_tokens"] = e.Output
 	}
+	// for another magpie that has this one as its provider (remote-magpie):
+	// the APIs a request for the model goes on as it is, so it sends each
+	// one on an API of these rather than having it translated twice, and
+	// whether it takes images
+	if native := nativeEndpoints(e); len(native) > 0 {
+		m["native_endpoints"] = native
+	}
+	if e.Images {
+		m["modalities"] = map[string]any{"input": []string{"text", "image"}}
+	} else if e.ImageInput != nil {
+		m["modalities"] = map[string]any{"input": []string{"text"}}
+	}
 	return m
+}
+
+// nativeEndpoints are the paths a request for the model is relayed on to
+// its provider as it is: the APIs the provider serves it on. None for a
+// routing group, whose members may speak any, or a model every request
+// to is translated anyway (a subscription served through its agent's own
+// API).
+func nativeEndpoints(e provider.Entry) []string {
+	p := e.Provider
+	if e.Group != "" || p.Native(e.Model) == "" {
+		return nil
+	}
+	apis := p.APIs(e.Model)
+	var out []string
+	for _, pr := range p.Speaks() {
+		if slices.Contains(provider.Protocols, pr) && (apis == nil || slices.Contains(apis, pr)) {
+			out = append(out, map[provider.Protocol]string{provider.Chat: "/v1/chat/completions", provider.Responses: "/v1/responses", provider.Anthropic: "/v1/messages"}[pr])
+		}
+	}
+	return out
 }
 
 // catalogFor is the catalog as the agent asking is shown it.
@@ -463,7 +495,7 @@ func (s *Server) countTokens(w http.ResponseWriter, r *http.Request) {
 	p, model, ok := provider.Resolve(unprefixed(model))
 	// Claude Subscription generations run through the Claude Code binary. Its
 	// OAuth token must not take a direct HTTP side path just for token counting.
-	if ok && p.Account != nil && (p.Account.Agent == "claude" || p.Account.Agent == "cursor" || p.Account.Agent == "grok" || p.Account.Agent == "devin" || p.Account.Agent == "kiro" || p.Account.Agent == "qoder" || p.Account.Agent == "zed" || p.Account.Agent == "factory" || p.Account.Agent == "gemini" || p.Account.Agent == "antigravity") ||
+	if ok && p.Account != nil && (p.Account.Agent == "claude" || p.Account.Agent == "cursor" || p.Account.Agent == "grok" || p.Account.Agent == "devin" || p.Account.Agent == "kiro" || p.Account.Agent == "qoder" || p.Account.Agent == provider.QoderCNID || p.Account.Agent == "zed" || p.Account.Agent == "factory" || p.Account.Agent == "gemini" || p.Account.Agent == "antigravity") ||
 		ok && p.Account != nil && p.Account.Agent == provider.CommandCodePlanID && cmdGoing(r.Context(), p) {
 		req, err := parseAnthropic(body)
 		if err != nil {
@@ -1069,6 +1101,18 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request, from provider.Pro
 			}
 			continue
 		}
+		if !last && hw.failed() && shapeRefused(hw.code(), hw.errBody()) {
+			// a request this vendor's API can't read (xAI's 422 over an
+			// input item it doesn't know, #350) another's may: the next is
+			// asked once, as each is, and this one doesn't rest
+			if other == nil {
+				other = &Try{Status: call.Status, Error: call.Error}
+			}
+			try.Fail = failShape
+			s.trace.update(tr, func(t *Route) { t.Tries[len(t.Tries)-1] = try })
+			skipped = append(skipped, c.label()+": "+call.Error)
+			continue
+		}
 		if wait, ok := passing(hw.code(), hw.header, again); ok && !last && again < lastRetries && hw.failed() && spentAfter(cands[i+1:]) {
 			// the others left are out of their allowance (Discord, waroy: a
 			// Codex account run out, Grok busy a moment): this one is the
@@ -1244,7 +1288,7 @@ func (s *Server) attempt(w http.ResponseWriter, r *http.Request, from provider.P
 	}
 	// Qoder is served through the API the client talks to, signed with the
 	// COSY envelope, with the account magpie signed in to.
-	if p.Account != nil && p.Account.Agent == "qoder" {
+	if p.Account != nil && (p.Account.Agent == "qoder" || p.Account.Agent == provider.QoderCNID) {
 		call.To = from
 		return s.serveQoder(w, r, from, p, model, body, &call.Usage)
 	}
@@ -1463,6 +1507,11 @@ func (s *Server) passthrough(w http.ResponseWriter, r *http.Request, p provider.
 	searchFn := false // Codex's tool search sent as a function
 	switch proto {
 	case provider.Responses:
+		// Responses Lite's tools, as an input item, go as OpenAI takes them
+		// only to OpenAI (#350)
+		if (p.Account == nil || p.Account.Agent != "codex") && !strings.HasSuffix(p.Host(), "openai.com") {
+			body = liftAdditionalTools(body)
+		}
 		// only the ChatGPT backend runs Codex's tool search as Codex sends it
 		if p.Account == nil || p.Account.Agent != "codex" {
 			body, searchFn = searchAsFunction(body)

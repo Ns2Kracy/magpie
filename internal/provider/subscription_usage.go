@@ -203,6 +203,20 @@ func fetchSubscriptionUsage() []SubscriptionQuota {
 		hidden[p.ID] = p.Hidden || p.Off // switched off: not asked either
 	}
 	var fetches []func() SubscriptionQuota
+	// a built-in moved onto its plugin shows the plugin's cards in its
+	// place, and none of its own: an agent's own sign-in it still finds
+	// would be a second card of the same account
+	placed := map[string]bool{}
+	moved := func(id string) bool {
+		if !Moved(id) {
+			return false
+		}
+		placed[id] = true
+		if !hidden[id] {
+			fetches = append(fetches, pluginUsageFetchesOf(via, id)...)
+		}
+		return true
+	}
 	if p, ok := claudeAccount(); ok && !hidden["claude"] {
 		if ls := accountsOf("claude"); len(ls) > 1 {
 			fetches = append(fetches, perLogin(via("claude"), ls, "Claude Code", "claude-color")...)
@@ -210,10 +224,10 @@ func fetchSubscriptionUsage() []SubscriptionQuota {
 			fetches = append(fetches, withUser(p.Account.User, func() SubscriptionQuota { return claudeSubscriptionUsage(viaLogin("claude", p.Account.User)) }))
 		}
 	}
-	if user, plan, ok := cursorIdentity(); ok && !hidden["cursor"] {
+	if user, plan, ok := cursorIdentity(); !moved("cursor") && ok && !hidden["cursor"] {
 		fetches = append(fetches, withUser(user, func() SubscriptionQuota { return cursorSubscriptionUsage(viaLogin("cursor", user), plan) }))
 	}
-	if _, ok := grokAccount(); ok && !hidden["grok"] {
+	if _, ok := grokAccount(); !moved("grok") && ok && !hidden["grok"] {
 		fetches = append(fetches, func() SubscriptionQuota { return grokSubscriptionUsage(via("grok")) })
 	}
 	if home, err := os.UserHomeDir(); err == nil {
@@ -237,32 +251,36 @@ func fetchSubscriptionUsage() []SubscriptionQuota {
 			}
 		}
 	}
-	if key := kiroKey(); key != "" && !hidden["kiro"] {
+	if moved("kiro") {
+	} else if key := kiroKey(); key != "" && !hidden["kiro"] {
 		fetches = append(fetches, func() SubscriptionQuota { return kiroQuotaAt(via("kiro"), key, "") })
 	} else if !hidden["kiro"] {
 		fetches = append(fetches, perLogin(via("kiro"), kiroLoginList(), "Kiro", "kiro-color")...)
 	}
-	if !hidden["zcode"] {
+	if !moved("zcode") && !hidden["zcode"] {
 		fetches = append(fetches, perLogin(via("zcode"), zcodeLoginList(), "ZCode", "zcode")...)
 	}
 	for _, w := range []*wbSite{wbCN, wbAI} {
-		if !hidden[w.id] {
+		if !moved(w.id) && !hidden[w.id] {
 			fetches = append(fetches, perLogin(via(w.id), wbLoginList(w), w.name, "workbuddy-color")...)
 		}
 	}
-	if !hidden[CommandCodePlanID] {
+	if !moved(CommandCodePlanID) && !hidden[CommandCodePlanID] {
 		fetches = append(fetches, perLogin(via(CommandCodePlanID), cmdLoginList(), "Command Code", "commandcode")...)
 	}
-	if !hidden["qoder"] {
+	if !moved("qoder") && !hidden["qoder"] {
 		fetches = append(fetches, perLogin(via("qoder"), loginsOf(qoderLogins()), "Qoder", "qoder")...)
 	}
-	if !hidden["zed"] {
+	if !moved(QoderCNID) && !hidden[QoderCNID] {
+		fetches = append(fetches, perLogin(via(QoderCNID), loginsOf(qoderLoginsOf(QoderCNID)), "Qoder CN", "qoder")...)
+	}
+	if !moved("zed") && !hidden["zed"] {
 		fetches = append(fetches, perLogin(via("zed"), zedLoginList(), "Zed", "zed")...)
 	}
-	if !hidden["factory"] {
+	if !moved("factory") && !hidden["factory"] {
 		fetches = append(fetches, perLogin(via("factory"), factoryLoginList(), "Factory", "factory")...)
 	}
-	if !hidden[MiMoID] {
+	if !moved(MiMoID) && !hidden[MiMoID] {
 		fetches = append(fetches, perLogin(via(MiMoID), mimoLoginList(), "Xiaomi MiMo", "mimocode")...)
 	}
 	for _, agent := range []string{"gemini", "antigravity"} {
@@ -273,7 +291,7 @@ func fetchSubscriptionUsage() []SubscriptionQuota {
 			fetches = append(fetches, func() SubscriptionQuota { return l.acct.quota(viaLogin(agent, l.User), l.Plan) })
 		}
 	}
-	fetches = append(fetches, pluginUsageFetches(via, hidden)...)
+	fetches = append(fetches, pluginUsageFetches(via, hidden, placed)...)
 	out := make([]SubscriptionQuota, len(fetches))
 	var wg sync.WaitGroup
 	for i, f := range fetches {

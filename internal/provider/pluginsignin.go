@@ -83,6 +83,7 @@ func (s *signInFlow) pluginDone(saved plugin.Saved, err error) {
 	case err != nil:
 		s.finish(SignInState{State: "failed", Error: err.Error()})
 	default:
+		clearPluginLapse(saved)
 		s.finish(SignInState{State: "done", User: pluginUser(saved)})
 	}
 }
@@ -98,6 +99,7 @@ func PluginAPIKey(ctx context.Context, id string, method int, inputs map[string]
 	if err != nil {
 		return "", err
 	}
+	clearPluginLapse(saved)
 	_ = ShowAccount(PluginID(saved.Provider))
 	return PluginID(saved.Provider), nil
 }

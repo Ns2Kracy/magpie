@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -34,7 +35,10 @@ type Model struct {
 	Image     bool     `json:"image"`
 	Released  string   `json:"released"`
 	Variants  []string `json:"variants"`
-	Cost      *struct {
+	// Free is set by the plugin on a model the plan serves at no cost to
+	// its allowance (WorkBuddy's "credits": "x0.00")
+	Free bool `json:"free"`
+	Cost *struct {
 		Input  float64 `json:"input"`
 		Output float64 `json:"output"`
 	} `json:"cost"`
@@ -296,19 +300,28 @@ type Saved struct {
 // ErrFailed is a sign-in the plugin says failed.
 var ErrFailed = errors.New("the sign-in failed")
 
+// failure is ErrFailed with why, where the plugin told it.
+func failure(why string) error {
+	if why == "" {
+		return ErrFailed
+	}
+	return fmt.Errorf("%w: %s", ErrFailed, why)
+}
+
 // Finish waits for an OAuth sign-in to finish: an "auto" one on its own,
 // a "code" one with the code pasted back. It gives where the sign-in was
 // saved.
 func Finish(ctx context.Context, session, code string) (Saved, error) {
 	var r struct {
-		OK bool `json:"ok"`
+		OK    bool   `json:"ok"`
+		Error string `json:"error"`
 		Saved
 	}
 	if err := Call(ctx, "callback", map[string]any{"session": session, "code": code}, &r); err != nil {
 		return Saved{}, err
 	}
 	if !r.OK {
-		return Saved{}, ErrFailed
+		return Saved{}, failure(r.Error)
 	}
 	return r.Saved, nil
 }
@@ -317,14 +330,15 @@ func Finish(ctx context.Context, session, code string) (Saved, error) {
 // "api" method does.
 func APIKey(ctx context.Context, provider string, method int, inputs map[string]string, key, account string) (Saved, error) {
 	var r struct {
-		OK bool `json:"ok"`
+		OK    bool   `json:"ok"`
+		Error string `json:"error"`
 		Saved
 	}
 	if err := Call(ctx, "apiKey", map[string]any{"provider": provider, "method": method, "inputs": inputs, "key": key, "account": account}, &r); err != nil {
 		return Saved{}, err
 	}
 	if !r.OK {
-		return Saved{}, ErrFailed
+		return Saved{}, failure(r.Error)
 	}
 	return r.Saved, nil
 }

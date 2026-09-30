@@ -84,6 +84,20 @@ func TestPluginUsage(t *testing.T) {
 		t.Fatalf("%d usage cards for the plugin's accounts, want 3", cards)
 	}
 
+	// a model the plugin says the plan serves at no cost shows as free,
+	// as WorkBuddy's built-in marked its x0.00 models
+	free := map[string]bool{}
+	for _, pp := range plugin.Cached() {
+		if pp.ID == "fakeco" {
+			for _, m := range pluginCatalog(pp) {
+				free[m.ID] = m.Free
+			}
+		}
+	}
+	if !free["fake-1"] || free["fake-claude"] {
+		t.Fatalf("free models %v, want fake-1 alone", free)
+	}
+
 	// the gateway asks the allowance by the account's UsageAgent
 	var agent string
 	for _, p := range All() {
@@ -93,6 +107,16 @@ func TestPluginUsage(t *testing.T) {
 	}
 	if agent != "plugin:fakeco" {
 		t.Fatalf("UsageAgent = %q", agent)
+	}
+	// the plan the usage told stays with the account, shown beside it
+	plan := false
+	for _, p := range All() {
+		if p.IsPlugin() && p.ID == "fakeco" && p.Account.User == "a@fake" {
+			plan = p.Account.Plan == "Fake Pro"
+		}
+	}
+	if !plan {
+		t.Fatal("a@fake's provider doesn't carry its plan")
 	}
 	if q := LoginUsage(ctx, agent)["full@fake"]; q.Resets == nil || !q.Resets.ByWindow || q.Resets.FiveHour != 2 || q.Resets.Weekly != 1 || q.Resets.Count != 3 || q.User != "Full@Fake.example" {
 		t.Fatalf("full@fake = %+v, resets %+v", q, q.Resets)

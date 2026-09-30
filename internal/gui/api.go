@@ -728,17 +728,8 @@ func state() stateJSON {
 	}
 	for _, a := range agent.Detected() {
 		vals := a.Values()
-		aj := agentJSON{ID: a.ID, Name: a.Name, Icon: a.Icon, Path: tilde(a.Path), Fields: []fieldJSON{}}
-		for _, f := range a.Fields {
-			opts := f.Options(vals)
-			if opts == nil {
-				opts = []agent.Option{}
-			}
-			aj.Fields = append(aj.Fields, fieldJSON{Key: f.Key, Label: f.Label, Value: vals[f.Key], Options: opts})
-		}
-		if takesCatalog(aj.Fields) {
-			aj.Models = modelCount(a.ID)
-		}
+		aj := agentJSON{ID: a.ID, Name: a.Name, Icon: a.Icon, Path: tilde(a.Path), Fields: agentFields(a, vals)}
+		aj.Models = agentModelCount(a.ID, aj.Fields)
 		aj.Drift = a.Drift()
 		if a.Import != nil {
 			aj.Import, aj.Added = a.Import(), a.Added != nil && a.Added()

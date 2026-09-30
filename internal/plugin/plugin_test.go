@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -93,6 +94,11 @@ func TestFakePlugin(t *testing.T) {
 	}
 	if _, err := Finish(ctx, a.Session, "bad"); err != ErrFailed {
 		t.Fatalf("a bad code: %v", err)
+	}
+	// the plugin's reason, where it tells one
+	a, _ = Authorize(ctx, "fakeco", 1, in, NewAccount)
+	if _, err := Finish(ctx, a.Session, "expired"); !errors.Is(err, ErrFailed) || err.Error() != "the sign-in failed: the sign-in page expired" {
+		t.Fatalf("an expired sign-in: %v", err)
 	}
 	a, _ = Authorize(ctx, "fakeco", 1, in, NewAccount)
 	if got, err := Finish(ctx, a.Session, "good"); err != nil || got != (Saved{"fakeco", "fakeco"}) {

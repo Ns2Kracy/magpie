@@ -32,6 +32,9 @@ func init() {
 				if s := strings.TrimRight(server, "/"); s != "" && s != devinServer {
 					md["server"] = s
 				}
+				if l.Home == "" {
+					md["cli"] = true // the plugin reads the CLI's key again, as the built-in does
+				}
 				out = append(out, Moving{User: l.User, First: l.Active, On: l.On, Lapsed: l.Lapsed != "", Own: l.Home == "",
 					Auth: map[string]any{"type": "api", "key": key, "metadata": md}})
 			}
@@ -43,7 +46,7 @@ func init() {
 			if key == "" {
 				return ls, "", errors.New("Devin: an unreadable plugin sign-in")
 			}
-			if own, _, err := DevinAuthAt(""); err == nil && own == key {
+			if own, _, err := DevinAuthAt(""); err == nil && (own == key || md["cli"] == true) {
 				return ls, ownUser(ls, "devin", str(md["email"])), nil
 			}
 			if user == "" {
@@ -140,6 +143,9 @@ func init() {
 				if l.Plan != "" {
 					md["plan"] = l.Plan
 				}
+				if l.Own {
+					md["cli"] = true // the plugin reads the CLI's key again, as the built-in does
+				}
 				out = append(out, Moving{User: l.User, First: l.Active, On: l.On, Lapsed: l.Lapsed != "", Own: l.Own,
 					Auth: map[string]any{"type": "api", "key": l.auth.APIKey, "metadata": md}})
 			}
@@ -151,7 +157,7 @@ func init() {
 			if key == "" {
 				return ls, "", errors.New("Command Code: an unreadable plugin sign-in")
 			}
-			if _, own, ok := cmdOwn(); ok && own.APIKey == key {
+			if _, own, ok := cmdOwn(); ok && (own.APIKey == key || md["cli"] == true) {
 				return ls, ownUser(ls, CommandCodePlanID, str(md["email"])), nil
 			}
 			i := -1

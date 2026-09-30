@@ -444,6 +444,20 @@ var unservedWords = regexp.MustCompile(`(?i)model.{0,80}(not (supported|accessib
 // refusal of the provider, not of the request, another member may serve.
 var refusedWords = regexp.MustCompile(`(?i)unapproved channel|illegal api invocation`)
 
+// shapeWords are how a vendor says it can't read the request's shape — an
+// item, field or parameter it doesn't know, which another vendor's API may
+// take: xAI's 422 "Failed to deserialize the JSON body …: unknown item type"
+// (#350), OpenAI's "Unknown parameter". A request missing what every API
+// requires ("field required") or too long for the model isn't one.
+var shapeWords = regexp.MustCompile(`(?i)failed to deserialize|unknown (item |content |input )?(type|variant|field|parameter)|unknown_parameter|unrecognized (request argument|field|parameter)|extra (inputs|fields) are not permitted|additional properties are not allowed`)
+
+// shapeRefused says a request failed over its shape alone: the next
+// member is asked, and this one doesn't rest, as nothing is wrong with it.
+func shapeRefused(status int, body []byte) bool {
+	return (status == 400 || status == 422) && shapeWords.Match(body) &&
+		!quotaWords.Match(body) && !unservedWords.Match(body) && !refusedWords.Match(body)
+}
+
 // retryable says whether another provider may do better with a request
 // that failed this way: the vendor was busy, out of quota or failing, or
 // this key or provider can't serve it — not the request itself at fault.
@@ -452,7 +466,7 @@ func retryable(status int, body []byte) bool {
 	case status == 401, status == 402, status == 403, status == 404, status == 408, status == 429, status >= 500:
 		return true
 	case status == 400, status == 422:
-		return quotaWords.Match(body) || unservedWords.Match(body) || refusedWords.Match(body)
+		return quotaWords.Match(body) || unservedWords.Match(body) || refusedWords.Match(body) || shapeWords.Match(body)
 	}
 	return false
 }

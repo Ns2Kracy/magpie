@@ -276,6 +276,9 @@ func addAccount(agentID string) error {
 			return fmt.Errorf("sign-in canceled")
 		}
 	}
+	if provider.Moved(agentID) {
+		return pluginLogin(context.Background(), agentID, "")
+	}
 	st, err := provider.StartSignIn(agentID)
 	if err != nil {
 		return err

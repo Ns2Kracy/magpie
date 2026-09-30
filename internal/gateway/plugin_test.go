@@ -36,12 +36,20 @@ func TestPluginProvider(t *testing.T) {
 	var mu sync.Mutex
 	var got []seen
 	limited := "" // the Authorization answered 429
+	refused := "" // and 401
 	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		mu.Lock()
 		got = append(got, seen{r.URL.RequestURI(), r.Header.Get("Authorization"), r.Header.Get("X-Plugin-Model"), string(b)})
 		out := limited != "" && r.Header.Get("Authorization") == limited
+		gone := refused != "" && r.Header.Get("Authorization") == refused
 		mu.Unlock()
+		if gone {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(401)
+			fmt.Fprint(w, `{"error":{"message":"token expired"}}`)
+			return
+		}
 		if out {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(429)
@@ -118,6 +126,33 @@ func TestPluginProvider(t *testing.T) {
 		if strings.Contains(last.body, `"request"`) {
 			t.Fatalf("%s kept Code Assist's envelope: %s", c.model, last.body)
 		}
+	}
+
+	// the vendor refuses the first account's sign-in: it shows lapsed, as a
+	// built-in's does, until a request on it goes through again
+	lapsed := func() string {
+		for _, l := range provider.Logins("fakeco") {
+			if l.Active {
+				return l.Lapsed
+			}
+		}
+		return "?"
+	}
+	mu.Lock()
+	refused = "Bearer k1"
+	mu.Unlock()
+	postAs(t, s, "", `{"model":"fakeco/fake-1","messages":[{"role":"user","content":"hello"}]}`)
+	if l := lapsed(); !strings.Contains(l, "sign-in has expired") {
+		t.Fatalf("the refused account's mark: %q", l)
+	}
+	mu.Lock()
+	refused = ""
+	mu.Unlock()
+	for i := 0; i < 3 && lapsed() != ""; i++ {
+		postAs(t, s, "", `{"model":"fakeco/fake-1","messages":[{"role":"user","content":"hello"}]}`)
+	}
+	if l := lapsed(); l != "" {
+		t.Fatalf("the mark stayed after a request went through: %q", l)
 	}
 
 	// a second account: the first rate limited, a request goes on the second

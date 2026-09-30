@@ -135,6 +135,9 @@ const (
 	// failRefused: the vendor's safety filter refused the request before
 	// anything was said (#248) — the next one is asked, and nobody rests
 	failRefused = "refused"
+	// failShape: the vendor couldn't read the request's shape (#350) — the
+	// next one is asked, and nobody rests
+	failShape = "shape"
 )
 
 // failure says why a reply failed.

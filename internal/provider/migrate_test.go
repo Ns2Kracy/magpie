@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/yetone/magpie/internal/plugin"
+	"github.com/yetone/magpie/internal/zed"
 )
 
 // fakeMover moves a made-up built-in, "fakeco", whose accounts keep a
@@ -187,6 +188,16 @@ func TestMoveToPlugin(t *testing.T) {
 	if err := Move(ctx, "fakeco"); err != nil {
 		t.Fatalf("moving again: %v", err)
 	}
+	// a built-in with no usage card of its own (Devin) keeps the plugin's
+	cards := 0
+	for _, q := range fetchSubscriptionUsage() {
+		if q.Provider == "fakeco" {
+			cards++
+		}
+	}
+	if cards == 0 {
+		t.Fatal("the moved plugin's accounts show no usage")
+	}
 
 	// the user reorders on the plugin, and it renews a's token; back, the
 	// built-in has both
@@ -356,5 +367,37 @@ func TestPutBackKeepsNewer(t *testing.T) {
 		if m, _ := MigrationOf("fakeco"); m.State != MoveFailed {
 			t.Fatalf("%s: %+v", c.name, m)
 		}
+	}
+}
+
+// A built-in moved onto its plugin shows no card of its own, even with
+// an account of it still on this machine (the agent's own sign-in), and
+// signs in no more: an account signed in to there would be served by
+// nothing.
+func TestMovedBuiltinQuiet(t *testing.T) {
+	claudeHome(t)
+	loginsMu.Lock()
+	_ = writeLogins([]savedLogin{{Agent: "zed", User: "left@example.com", On: true, First: true, Auth: []byte(`{"userId":"u1","accessToken":"a"}`)}})
+	loginsMu.Unlock()
+	zedCloud = "http://127.0.0.1:1" // no network: the card shows its error
+	t.Cleanup(func() { zedCloud = zed.CloudURL })
+	cards := func() int {
+		n := 0
+		for _, q := range fetchSubscriptionUsage() {
+			if q.Provider == "zed" {
+				n++
+			}
+		}
+		return n
+	}
+	if cards() != 1 {
+		t.Fatal("the built-in's card isn't there to go")
+	}
+	_ = setMigration("zed", func(m *Migration) { *m = Migration{State: MovePlugin, At: time.Now()} })
+	if n := cards(); n != 0 {
+		t.Fatalf("%d cards of the moved built-in", n)
+	}
+	if _, err := StartSignIn("zed"); err == nil || !strings.Contains(err.Error(), "plugin") {
+		t.Fatalf("a sign-in to the moved built-in: %v", err)
 	}
 }

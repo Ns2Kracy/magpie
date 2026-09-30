@@ -139,6 +139,16 @@ deleted keys keep their historical identity. Older records appear as
 **key not recorded**, never inferred from today's configured key.
 These are upstream credentials, not keys clients use to call Magpie.
 
+One magpie can serve several computers (an office one, a personal one):
+share it on the network (Settings → Share on local network), and on each
+other computer add it as a **Remote magpie** — in the app's Add sheet, or
+`magpie provider add remote-magpie sk-magpie-… url=http://192.168.1.20:3425 id=office`.
+Each computer's own magpie still wires its agents, while the providers,
+routing groups (`office/group/…`) and usage are the shared one's. A request
+goes on in the API the agent spoke — Anthropic Messages, Responses, Chat
+Completions, token counting — and a model the shared magpie's provider serves
+on another API only is turned into that API once, never on both computers.
+
 Baidu Qianfan's [Token Plans](https://cloud.baidu.com/doc/qianfan/s/Dmrabu8b6)
 are available as `baidu-qianfan`: a personal (个人版) and an enterprise (企业版)
 plan and pay as you go, each with its own Chat Completions, Responses and
@@ -254,7 +264,9 @@ Keychain or `~/.claude/.credentials.json`), Codex (a ChatGPT login in
 `~/.codex/auth.json`), Copilot (a GitHub login in
 `~/.config/github-copilot/apps.json`), Devin (`devin auth login`, kept in
 `~/.local/share/devin/credentials.toml`) and Qoder (signed in from magpie with
-its OAuth device flow, kept in magpie's own config) appear in `magpie providers` and in
+its OAuth device flow, kept in magpie's own config; Qoder CN is its own
+subscription beside it, for accounts on qoder.cn made with an Alibaba Cloud
+account or a phone number, which can't sign in on qoder.com) appear in `magpie providers` and in
 the Providers tab as *signed in as …*, with their models spelled
 `claude/claude-sonnet-5`, `codex/gpt-5.5`, `copilot/claude-sonnet-4.5` or
 `devin/swe-2-max` in every other agent's picker. magpie reads the agent's own credentials each
@@ -305,7 +317,9 @@ with the app; `magpie serve` runs it alone. It exposes:
 
 Each `/v1/models` entry includes `reasoning` and `supported_reasoning_levels`
 (`[{"effort":"low"}, ...]`). A routing group lists only the levels every
-member supports.
+member supports. `native_endpoints` (`["/v1/messages"]`) names the APIs a
+request for the model is passed straight through on; it is left out of a
+routing group, and of a model every request to is translated anyway.
 
 Requests pass straight through when the vendor speaks the agent's API and
 are translated otherwise, streaming, tool calls and reasoning included. The
