@@ -31,16 +31,12 @@ type Row struct {
 // session hold Query (any case).
 type Filter struct {
 	Agent  string
-	Key    string // provider#fingerprint; an empty fingerprint selects unattributed calls
 	Failed bool
 	Query  string
 }
 
 func (f Filter) keeps(r Record) bool {
 	if f.Agent != "" && AgentOf(r.Agent) != f.Agent {
-		return false
-	}
-	if f.Key != "" && r.Provider+"#"+r.KeyID != f.Key {
 		return false
 	}
 	if f.Failed && r.Status < 400 {

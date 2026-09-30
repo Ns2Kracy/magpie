@@ -114,7 +114,7 @@ func usageTo(out io.Writer, args []string) error {
 	})
 	table("models", s.Models, func(g stats.Group) string { return g.ID })
 	if len(s.Keys) > 0 {
-		table("API keys", s.Keys, func(g stats.Group) string {
+		table("provider keys", s.Keys, func(g stats.Group) string {
 			name := g.KeyName
 			if name == "" {
 				name = g.KeyID

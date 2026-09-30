@@ -72,14 +72,8 @@ func TestKeyUsageKeepsIdentityAndPrices(t *testing.T) {
 			t.Fatalf("old provider id: %+v", g)
 		}
 	}
-	rows, sum, _ := ledger(Month.Since(now), Filter{Key: "renamed#" + team}, recs)
-	if len(rows) != 2 || sum.Calls != 2 || sum.Errors != 1 || sum.Input != 200 {
-		t.Fatalf("key filter: %+v, %+v", rows, sum)
-	}
-	if rows, _, _ := ledger(time.Time{}, Filter{Key: "renamed#", Query: "m"}, recs); len(rows) != 1 || rows[0].KeyID != "" {
-		t.Fatalf("unattributed filter: %+v", rows)
-	}
-	if rows, _, _ := ledger(Month.Since(now), Filter{Query: "TEAM"}, recs); len(rows) != 2 {
+	rows, _, _ := ledger(Month.Since(now), Filter{Query: "TEAM"}, recs)
+	if len(rows) != 2 {
 		t.Fatalf("key name search: %+v", rows)
 	}
 	var b strings.Builder
