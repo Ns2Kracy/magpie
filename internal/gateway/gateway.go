@@ -947,7 +947,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request, from provider.Pro
 	again := 0       // times the last one left has been tried again
 	resealed := 0    // what of the conversation another account sealed was taken out: its reasoning, then its compaction
 	floored := false // the reply's length raised to what the provider takes
-	keyID, keyName := "", ""
+	providerKeyID, providerKeyName := "", ""
 	var other *Try     // the first failure that wasn't an allowance run out
 	autoReset := false // a Codex or Claude reset looked at, once a request
 	for i := 0; i < len(cands); i++ {
@@ -958,9 +958,9 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request, from provider.Pro
 		hw := newHoldWriter(w, !last || again < lastRetries || other != nil)
 		call.Provider, call.To, call.Usage = c.p.ID, "", Usage{}
 		where = c.p.Where()
-		keyID, keyName = "", ""
+		providerKeyID, providerKeyName = "", ""
 		if c.p.Account == nil && c.p.Key != "" {
-			keyID, keyName = provider.KeyID(c.p.Key), c.p.KeyName
+			providerKeyID, providerKeyName = provider.KeyID(c.p.Key), c.p.KeyName
 		}
 		began := time.Now()
 		hw.first.start = began
@@ -1093,7 +1093,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request, from provider.Pro
 			matesFirst(cands[i+1:], c)
 			if call.To != "" {
 				usage.Append(usage.Record{Time: began, Agent: call.Agent, Provider: call.Provider, Host: where, Model: c.model,
-					KeyID: keyID, KeyName: keyName,
+					ProviderKeyID: providerKeyID, ProviderKeyName: providerKeyName,
 					Requested: call.Model, Served: call.Usage.Served,
 					Input: call.Usage.Input, Output: call.Usage.Output, CacheRead: call.Usage.CacheRead,
 					CacheWrite: call.Usage.CacheWrite, Reasoning: call.Usage.Reasoning, Effort: sent, Millis: time.Since(began).Milliseconds(), Status: call.Status,
@@ -1233,7 +1233,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request, from provider.Pro
 	s.record(call)
 	if call.To != "" {
 		usage.Append(usage.Record{Time: start, Agent: call.Agent, Provider: call.Provider, Host: where, Model: model,
-			KeyID: keyID, KeyName: keyName,
+			ProviderKeyID: providerKeyID, ProviderKeyName: providerKeyName,
 			Requested: call.Model, Served: call.Usage.Served,
 			Input: call.Usage.Input, Output: call.Usage.Output, CacheRead: call.Usage.CacheRead,
 			CacheWrite: call.Usage.CacheWrite, Reasoning: call.Usage.Reasoning, Effort: sent, Millis: call.Millis, Status: call.Status,

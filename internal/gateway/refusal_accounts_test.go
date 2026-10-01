@@ -208,7 +208,7 @@ func TestClaudeRefusalMovesToNextKey(t *testing.T) {
 		t.Fatalf("tries: %+v", r.Tries)
 	}
 	recs := usage.Load(time.Time{})
-	if len(recs) != 2 || recs[0].KeyID != provider.KeyID("k1") || recs[1].KeyID != provider.KeyID("k2") {
+	if len(recs) != 2 || recs[0].ProviderKeyID != provider.KeyID("k1") || recs[1].ProviderKeyID != provider.KeyID("k2") {
 		t.Fatalf("refusal and answer must keep their own keys: %+v", recs)
 	}
 }

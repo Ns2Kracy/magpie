@@ -30,32 +30,32 @@ func TestKeyUsageKeepsIdentityAndPrices(t *testing.T) {
 	now := time.Now()
 	personal, team := provider.KeyID("personal-secret"), provider.KeyID("team-secret")
 	recs := []Record{
-		{Time: now.Add(-40 * 24 * time.Hour), Provider: "relay", Model: "m", KeyID: team, Input: 9999},
+		{Time: now.Add(-40 * 24 * time.Hour), Provider: "relay", Model: "m", ProviderKeyID: team, Input: 9999},
 		{Time: now.Add(-time.Minute), Provider: "relay", Model: "m", Input: 3, Output: 1, Status: 200},
-		{Time: now, Provider: "relay", Model: "m", KeyID: personal, KeyName: "Old name", Input: 100, Output: 10, CacheRead: 40, CacheWrite: 20, Status: 200},
-		{Time: now, Provider: "relay", Model: "m", KeyID: personal, KeyName: "Personal", Input: 50, Output: 5, Status: 200},
-		{Time: now, Provider: "relay", Model: "m", KeyID: team, KeyName: "Team", Input: 200, Output: 20, Status: 200},
-		{Time: now, Provider: "relay", Model: "m", KeyID: team, KeyName: "Team", Status: 429},
-		{Time: now, Provider: "other", Model: "m", KeyID: personal, KeyName: "Personal", Input: 7, Status: 200},
+		{Time: now, Provider: "relay", Model: "m", ProviderKeyID: personal, ProviderKeyName: "Old name", Input: 100, Output: 10, CacheRead: 40, CacheWrite: 20, Status: 200},
+		{Time: now, Provider: "relay", Model: "m", ProviderKeyID: personal, ProviderKeyName: "Personal", Input: 50, Output: 5, Status: 200},
+		{Time: now, Provider: "relay", Model: "m", ProviderKeyID: team, ProviderKeyName: "Team", Input: 200, Output: 20, Status: 200},
+		{Time: now, Provider: "relay", Model: "m", ProviderKeyID: team, ProviderKeyName: "Team", Status: 429},
+		{Time: now, Provider: "other", Model: "m", ProviderKeyID: personal, ProviderKeyName: "Personal", Input: 7, Status: 200},
 		{Time: now, Provider: "subscription", Model: "m", Host: "user@example.com", Input: 9, Status: 200},
 	}
 	s := summarize(Month, now, recs)
-	if len(s.Keys) != 4 || s.Calls != 7 || s.Errors != 1 {
+	if len(s.ProviderKeys) != 4 || s.Calls != 7 || s.Errors != 1 {
 		t.Fatalf("summary: %+v", s)
 	}
 	byID := map[string]Group{}
-	for _, g := range s.Keys {
+	for _, g := range s.ProviderKeys {
 		byID[g.ID] = g
 	}
 	p := byID["relay#"+personal]
 	wantCost := (150*2 + 15*8 + 40*0.5 + 20*2.5) / 1e6
-	if p.KeyName != "Personal" || p.Calls != 2 || p.Input != 150 || p.CacheRead != 40 || p.CacheWrite != 20 || math.Abs(p.Cost-wantCost) > 1e-9 {
+	if p.ProviderKeyName != "Personal" || p.Calls != 2 || p.Input != 150 || p.CacheRead != 40 || p.CacheWrite != 20 || math.Abs(p.Cost-wantCost) > 1e-9 {
 		t.Fatalf("personal: %+v", p)
 	}
 	if g := byID["relay#"+team]; g.Calls != 2 || g.Errors != 1 || g.Input != 200 {
 		t.Fatalf("team: %+v", g)
 	}
-	if g := byID["relay#"]; g.Calls != 1 || g.Input != 3 || g.KeyID != "" {
+	if g := byID["relay#"]; g.Calls != 1 || g.Input != 3 || g.ProviderKeyID != "" {
 		t.Fatalf("unattributed: %+v", g)
 	}
 	if g := byID["other#"+personal]; g.Calls != 1 || g.Input != 7 {
@@ -67,7 +67,7 @@ func TestKeyUsageKeepsIdentityAndPrices(t *testing.T) {
 		t.Fatal(err)
 	}
 	s = summarize(Month, now, recs)
-	for _, g := range s.Keys {
+	for _, g := range s.ProviderKeys {
 		if g.Provider == "relay" {
 			t.Fatalf("old provider id: %+v", g)
 		}

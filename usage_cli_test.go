@@ -58,16 +58,16 @@ func TestUsageCSV(t *testing.T) {
 func TestUsageProviderKeys(t *testing.T) {
 	groupsHome(t)
 	id := provider.KeyID("fixture-provider-secret")
-	stats.Append(stats.Record{Provider: "relay", Model: "m", KeyID: id, KeyName: "Team", Input: 30, Status: 200})
+	stats.Append(stats.Record{Provider: "relay", Model: "m", ProviderKeyID: id, ProviderKeyName: "Team", Input: 30, Status: 200})
 	out, err := said(t, func() error { return usageCmd([]string{"usage", "all"}) })
-	if err != nil || !strings.Contains(out, "provider keys") || !strings.Contains(out, "relay / Team") || strings.Contains(out, "fixture-provider-secret") {
+	if err != nil || !strings.Contains(out, "upstream provider keys") || !strings.Contains(out, "relay / Team") || strings.Contains(out, "fixture-provider-secret") {
 		t.Fatal(out, err)
 	}
 	var csv strings.Builder
 	if err := usageTo(&csv, []string{"usage", "--csv", "all"}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(csv.String(), "key_id,key_name") || !strings.Contains(csv.String(), id+",Team") || strings.Contains(csv.String(), "fixture-provider-secret") {
+	if !strings.Contains(csv.String(), "provider_key_id,provider_key_name") || !strings.Contains(csv.String(), id+",Team") || strings.Contains(csv.String(), "fixture-provider-secret") {
 		t.Fatal(csv.String())
 	}
 }

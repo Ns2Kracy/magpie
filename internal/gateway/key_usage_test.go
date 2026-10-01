@@ -61,21 +61,21 @@ func TestUsageNamesTheKeyThatAnswered(t *testing.T) {
 				t.Fatalf("reply: %d %s", code, reply)
 			}
 			r := lastUsage(t)
-			if r.KeyID != provider.KeyID("team-secret") || r.KeyName != "Team" || r.Input != 20 || r.Output != 5 || r.CacheRead != 10 ||
+			if r.ProviderKeyID != provider.KeyID("team-secret") || r.ProviderKeyName != "Team" || r.Input != 20 || r.Output != 5 || r.CacheRead != 10 ||
 				strings.Join(tried, ",") != "personal-secret,team-secret" {
 				t.Fatalf("usage: %+v; tried %v", r, tried)
 			}
-			if err := provider.RenameKey("plan", r.KeyID, "Renamed team"); err != nil {
+			if err := provider.RenameKey("plan", r.ProviderKeyID, "Renamed team"); err != nil {
 				t.Fatal(err)
 			}
-			if err := provider.UseKey("plan", r.KeyID); err != nil {
+			if err := provider.UseKey("plan", r.ProviderKeyID); err != nil {
 				t.Fatal(err)
 			}
 			if code, _ := sendTo(s, path, body); code != 200 {
 				t.Fatal(code)
 			}
 			recs := usage.Load(time.Time{})
-			if len(recs) != 2 || recs[0].KeyID != recs[1].KeyID || recs[1].KeyName != "Renamed team" {
+			if len(recs) != 2 || recs[0].ProviderKeyID != recs[1].ProviderKeyID || recs[1].ProviderKeyName != "Renamed team" {
 				t.Fatalf("after promotion and rename: %+v", recs)
 			}
 			log, err := os.ReadFile(usage.Path())
@@ -96,7 +96,7 @@ func TestImageUsageNamesTheKey(t *testing.T) {
 	if code, body := sendTo(s, "/v1/images/generations", `{"model":"art/gpt-image-1","prompt":"a bird"}`); code != 200 {
 		t.Fatalf("reply: %d %s", code, body)
 	}
-	if r := lastUsage(t); r.KeyID != provider.KeyID("key") || r.KeyName != "Images" || r.Input != 7 || r.Output != 100 {
+	if r := lastUsage(t); r.ProviderKeyID != provider.KeyID("key") || r.ProviderKeyName != "Images" || r.Input != 7 || r.Output != 100 {
 		t.Fatalf("image usage: %+v", r)
 	}
 }

@@ -130,10 +130,12 @@ separate Responses endpoint, `catalog=` to borrow a models.dev list, and
 `models=` to name the models to expose. Anything a preset does not know can
 be overridden the same way.
 
-`magpie usage` also lists **provider keys** to help check upstream bills.
+`magpie usage` also lists **upstream provider keys** to help check upstream bills.
 Each request records the fingerprint and saved name of the key that actually
 served it, including image calls and account/key failover. The CSV adds
-`key_id` and `key_name`. No raw credential is stored in usage records.
+`provider_key_id` and `provider_key_name`. JSON uses `providerKeyId` and `providerKeyName`, distinct from gateway caller
+keys. System One calls use the same attribution. No raw credential is stored
+in usage records.
 Rotating the provider's first key does not move old usage to its replacement;
 deleted keys keep their historical identity. Older records appear as
 **key not recorded**, never inferred from today's configured key.

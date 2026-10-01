@@ -113,11 +113,11 @@ func usageTo(out io.Writer, args []string) error {
 		return g.ID
 	})
 	table("models", s.Models, func(g stats.Group) string { return g.ID })
-	if len(s.Keys) > 0 {
-		table("provider keys", s.Keys, func(g stats.Group) string {
-			name := g.KeyName
+	if len(s.ProviderKeys) > 0 {
+		table("upstream provider keys", s.ProviderKeys, func(g stats.Group) string {
+			name := g.ProviderKeyName
 			if name == "" {
-				name = g.KeyID
+				name = g.ProviderKeyID
 			}
 			if name == "" {
 				name = "key not recorded"
