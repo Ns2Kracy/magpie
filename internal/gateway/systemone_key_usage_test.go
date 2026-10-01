@@ -68,3 +68,18 @@ func TestSystemOneUsageNamesProviderKey(t *testing.T) {
 		})
 	}
 }
+
+func TestSystemOneWithoutProviderKeyStaysUnattributed(t *testing.T) {
+	fresh(t)
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, `{"usage":{"input_tokens":10,"output_tokens":1}}`)
+	}))
+	defer up.Close()
+	p := provider.Provider{ID: "local-jev", Name: "Local Jev", KeyName: "unused", Decide: up.URL + "/v1"}
+	if _, err := New().systemOne(context.Background(), p, "jev", []byte(`{"questions":{}}`)); err != nil {
+		t.Fatal(err)
+	}
+	if r := lastUsage(t); r.ProviderKeyID != "" || r.ProviderKeyName != "" {
+		t.Fatalf("keyless System One call acquired a provider identity: %+v", r)
+	}
+}
