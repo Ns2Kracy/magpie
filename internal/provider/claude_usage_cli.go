@@ -12,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	// the zone /usage names its resets in: Windows has no zone database,
+	// and without one a reset was read in the machine's own zone
+	_ "time/tzdata"
 )
 
 // claudeCLIUsage runs Claude Code's /usage for the account it is signed in

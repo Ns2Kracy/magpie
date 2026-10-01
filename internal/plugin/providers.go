@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/yetone/magpie/internal/settings"
+	"github.com/yetone/magpie/internal/steady"
 )
 
 // Method is a way a plugin signs in: "oauth" (a browser, then a code
@@ -133,7 +134,7 @@ func Providers(ctx context.Context) ([]Provider, error) {
 	provCache, provGood = ps, true
 	provMu.Unlock()
 	if b, err := json.Marshal(ps); err == nil {
-		_ = os.WriteFile(providersPath(), b, 0o600)
+		_ = writeWhole(providersPath(), b)
 	}
 	return ps, nil
 }
@@ -145,7 +146,7 @@ func Providers(ctx context.Context) ([]Provider, error) {
 // why, rather than going as if it were removed.
 func keepUnloaded(ps, last []Provider) []Provider {
 	if last == nil {
-		if b, err := os.ReadFile(providersPath()); err == nil {
+		if b, err := steady.ReadFile(providersPath()); err == nil {
 			_ = json.Unmarshal(b, &last)
 		}
 	}
@@ -197,7 +198,7 @@ func Cached() []Provider {
 	good := provGood
 	provMu.Unlock()
 	if ps == nil {
-		if b, err := os.ReadFile(providersPath()); err == nil {
+		if b, err := steady.ReadFile(providersPath()); err == nil {
 			_ = json.Unmarshal(b, &ps)
 		}
 	}
@@ -302,7 +303,7 @@ func firstNonEmpty(ss ...string) string {
 
 func readAuth() map[string]storedAuth {
 	var m map[string]storedAuth
-	if b, err := os.ReadFile(AuthPath()); err == nil {
+	if b, err := steady.ReadFile(AuthPath()); err == nil {
 		_ = json.Unmarshal(b, &m)
 	}
 	return m
@@ -433,7 +434,7 @@ func SignOut(ctx context.Context, provider, account string) error {
 		return Call(ctx, "signOut", map[string]any{"provider": provider, "account": account}, nil)
 	}
 	var m map[string]json.RawMessage
-	b, err := os.ReadFile(AuthPath())
+	b, err := steady.ReadFile(AuthPath())
 	if err != nil {
 		return nil
 	}
@@ -446,7 +447,7 @@ func SignOut(ctx context.Context, provider, account string) error {
 		}
 	}
 	b, _ = json.MarshalIndent(m, "", "  ")
-	if err := os.WriteFile(AuthPath(), append(b, '\n'), 0o600); err != nil {
+	if err := writeWhole(AuthPath(), append(b, '\n')); err != nil {
 		return err
 	}
 	changed()
@@ -540,7 +541,7 @@ func Check(ctx context.Context, provider, account string) (Checked, error) {
 // Auths are provider's sign-ins as plugin-auth.json keeps them, by key.
 func Auths(provider string) map[string]map[string]any {
 	var m map[string]map[string]any
-	if b, err := os.ReadFile(AuthPath()); err == nil {
+	if b, err := steady.ReadFile(AuthPath()); err == nil {
 		_ = json.Unmarshal(b, &m)
 	}
 	out := map[string]map[string]any{}

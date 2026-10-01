@@ -1115,7 +1115,9 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request, from provider.Pro
 			call.Error = refusedError(c.p, c.model, hw.failMsg)
 		}
 		try := Try{ID: c.rest, Model: c.model, Effort: sent, Picked: picked, Fixed: c.effort, Start: began, Done: true, Status: call.Status, Millis: time.Since(began).Milliseconds(), Error: call.Error,
-			Served: call.Usage.Served, Swapped: swapped(provider.SentNameOnIn(wiresOf(r.Context()), c.p.ID, accountAgent(c.p), c.model, sent), call.Usage.Served)}
+			Served: call.Usage.Served}
+		asName := provider.SentNameOnIn(wiresOf(r.Context()), c.p.ID, accountAgent(c.p), c.model, sent)
+		try.Swapped, try.Routed = swapped(asName, call.Usage.Served), usage.GroupRouted(asName, call.Usage.Served)
 		try.TTFT, try.FirstText = hw.first.ms()
 		// the request's, from when it came as its ms are: the time before
 		// this try, the ones that failed first, is in it
@@ -1322,7 +1324,7 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request, from provider.Pro
 		t.Tokens = call.Usage.Input + call.Usage.Output + call.Usage.CacheRead + call.Usage.CacheWrite
 		t.Output, t.TTFT, t.FirstText = call.Usage.Output, call.TTFT, call.FirstText
 		if n := len(t.Tries); n > 0 && call.Status < 400 {
-			t.Served, t.Swapped = t.Tries[n-1].Served, t.Tries[n-1].Swapped
+			t.Served, t.Swapped, t.Routed = t.Tries[n-1].Served, t.Tries[n-1].Swapped, t.Tries[n-1].Routed
 		}
 	})
 	s.record(call)
@@ -1669,9 +1671,35 @@ func (s *Server) passthrough(w http.ResponseWriter, r *http.Request, p provider.
 	if proto == provider.Anthropic && p.Account == nil && fromClaudeCode(r.Header) && r.URL.Query().Get("beta") == "true" {
 		path += "?beta=true" // as Claude Code asks it
 	}
+	if proto != provider.Anthropic {
+		body = s.withoutRefused(p.ID, proto, body)
+	}
 	res, err := s.forward(r.Context(), p, proto, path, p.Prepare(body), r.Header)
 	if err != nil {
 		return writeError(w, proto, 502, p.Name+": "+err.Error()), err.Error(), true
+	}
+	// a vendor that turns away the fields it doesn't know (Mistral's
+	// extra_forbidden for OpenCode's store, #393) is asked again without
+	// the optional ones it named, and not sent them again once that works
+	var refused []string
+	for proto != provider.Anthropic && badRequest(res.StatusCode) {
+		b, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+		res.Body.Close()
+		res.Body = io.NopCloser(bytes.NewReader(b))
+		fs := refusedOptional(res.StatusCode, b, body)
+		if len(fs) == 0 {
+			break
+		}
+		refused = append(refused, fs...)
+		body = withoutFields(body, fs...)
+		if res, err = s.forward(r.Context(), p, proto, path, p.Prepare(body), r.Header); err != nil {
+			return writeError(w, proto, 502, p.Name+": "+err.Error()), err.Error(), true
+		}
+	}
+	if res.StatusCode < 400 {
+		for _, f := range refused {
+			s.markUnfit(p.ID, f, proto)
+		}
 	}
 	if e := bodyEffort(proto, body); res.StatusCode == http.StatusBadRequest && (e == "none" || e == "minimal" || proto == provider.Chat && hasReasoningDisabled(body)) {
 		// A model can refuse reasoning turned off. If it names its levels,
@@ -1920,6 +1948,10 @@ func (s *Server) forwardTranslated(ctx context.Context, p provider.Provider, to 
 			r := *req
 			r.CacheKey, req = "", &r
 		}
+		if offEffort(req.Effort) && !s.fits(p.ID, offRefused(model), to) {
+			r := *req
+			r.Effort, req = fitFor(p, model, "low"), &r
+		}
 		if to == provider.Anthropic && p.IsBedrock() && req.Metadata != nil {
 			// not the plain id Bedrock checks metadata.user_id against (#176)
 			r := *req
@@ -1963,8 +1995,18 @@ func (s *Server) forwardTranslated(ctx context.Context, p provider.Provider, to 
 			s.markUnfit(p.ID, thinkingConfigField, to)
 			continue
 		}
+		if offEffort(req.Effort) && res.StatusCode == http.StatusBadRequest && effortLevelsNamed.Match(b) {
+			// reasoning turned off, which the model refuses naming the
+			// levels it takes (Command Code's `expected one of "low"|…`
+			// for Claude Code's auto mode classifier, #394): asked again
+			// at its lowest, and so from then on
+			s.markUnfit(p.ID, offRefused(model), to)
+			r := *req
+			r.Effort, req = fitFor(p, model, "low"), &r
+			continue
+		}
 		if to == provider.Chat && res.StatusCode == http.StatusBadRequest && req.Effort != "none" &&
-			toolsWithoutEffort.Match(b) && !s.servesElsewhere(p, model, to) {
+			toolsWithoutEffort.Match(b) && !s.servesElsewhere(p, model, to) && s.fits(p.ID, offRefused(model), to) {
 			// tools with reasoning refused on chat, and no Responses API
 			// to take them to: asked again without reasoning (#176)
 			r := *req
@@ -2023,6 +2065,55 @@ const cacheKeyField = "prompt_cache_key"
 // Groq's "unsupported" — by the field's name in the error.
 func refusesField(status int, body []byte, field string) bool {
 	return badRequest(status) && bytes.Contains(body, []byte(field))
+}
+
+// optionalFields are request fields OpenAI's APIs (or an agent's own
+// vendor, Kimi's and Qwen's thinking switches) take that a request does
+// without: an upstream that refuses one by name is asked again without it.
+var optionalFields = []string{"store", "metadata", "service_tier", cacheKeyField, "prompt_cache_retention",
+	"safety_identifier", "stream_options", "parallel_tool_calls", "verbosity", "thinking", "enable_thinking"}
+
+// refusedOptional lists the optional fields of body an upstream's error
+// names as what it turned the request away for: named quoted, as Mistral's
+// extra_forbidden (loc ["body","store"], each field it refused in one
+// reply), Gemini's Unknown name "store" and Groq's 'store' is unsupported
+// do.
+func refusedOptional(status int, msg, body []byte) []string {
+	if !badRequest(status) {
+		return nil
+	}
+	var m map[string]json.RawMessage
+	if json.Unmarshal(body, &m) != nil {
+		return nil
+	}
+	var out []string
+	for _, f := range optionalFields {
+		if _, ok := m[f]; !ok {
+			continue
+		}
+		for _, q := range []string{`"` + f + `"`, `"` + f + `\"`, `'` + f + `'`, "`" + f + "`"} {
+			if bytes.Contains(msg, []byte(q)) {
+				out = append(out, f)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// withoutRefused leaves out of body the optional fields the provider has
+// refused on proto before.
+func (s *Server) withoutRefused(providerID string, proto provider.Protocol, body []byte) []byte {
+	var drop []string
+	for _, f := range optionalFields {
+		if !s.fits(providerID, f, proto) {
+			drop = append(drop, f)
+		}
+	}
+	if len(drop) == 0 {
+		return body
+	}
+	return withoutFields(body, drop...)
 }
 
 // badRequest is a status an upstream refuses a request's contents with.
@@ -2471,6 +2562,13 @@ func conversationID(in http.Header, body []byte) string {
 	sum := sha256.Sum256(first)
 	return "magpie-" + hex.EncodeToString(sum[:12])
 }
+
+// offEffort is an effort turning reasoning off, or as near off as asked.
+func offEffort(e string) bool { return e == "none" || e == "minimal" }
+
+// offRefused is how unfit remembers a provider refusing reasoning turned
+// off for model.
+func offRefused(model string) string { return "reasoning off\x00" + model }
 
 // effortLevelsNamed is an error that lists the reasoning levels a model
 // takes, as one refusing "none" does: Command Code's `expected one of

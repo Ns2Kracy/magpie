@@ -50,6 +50,11 @@ let exampleModel = localStorage.getItem("magpie.model") || "";  // the model in 
 let connectFolded = false; // Connect folded away under its heading
 try { connectFolded = localStorage.getItem("magpie.gwConnectFolded") === "1"; } catch {}
 const expandedCalls = new Set(); // recent-call ids whose wire bodies are open
+// a streamed reply's body is read as its reply, its events or as it came;
+// the pick is one for every call and kept, the events drawn per call
+let sseView = "events";
+try { sseView = localStorage.getItem("magpie.sseView") || "events"; } catch {}
+const sseShown = new Map(); // call id → how many events are drawn
 let savedModelFavorites = [];
 try { savedModelFavorites = JSON.parse(localStorage.getItem("magpie.modelFavorites") || "[]"); } catch {}
 const modelFavorites = new Set(Array.isArray(savedModelFavorites) ? savedModelFavorites : []);
@@ -2845,7 +2850,226 @@ function formatWireBody(raw) {
   try { return JSON.stringify(JSON.parse(raw), null, 2); } catch { return raw; }
 }
 
-function callBodyPanel(label, raw, truncated) {
+// A streamed body (server-sent events) as its events: each one's name and
+// its data, the data lines joined. Anything else is not one: null.
+function parseSSE(raw) {
+  if (!raw || !/^\s*(?::[^\n]*\n\s*)*(event|data|id|retry):/.test(raw)) return null;
+  const events = [];
+  let ev = null;
+  const done = () => { if (ev && ev.data.length) events.push({ event: ev.event, data: ev.data.join("\n") }); ev = null; };
+  for (const line of raw.split(/\r?\n/)) {
+    if (line === "") { done(); continue; }
+    if (line[0] === ":") continue; // a comment, a keep-alive
+    const i = line.indexOf(":");
+    const field = i < 0 ? line : line.slice(0, i);
+    let value = i < 0 ? "" : line.slice(i + 1);
+    if (value[0] === " ") value = value.slice(1);
+    ev = ev || { event: "", data: [] };
+    if (field === "event") ev.event = value;
+    else if (field === "data") ev.data.push(value);
+  }
+  done();
+  return events.length ? events : null;
+}
+
+const jsonOr = (s) => { try { return JSON.parse(s); } catch { return undefined; } };
+
+// What a stream adds up to — its text, reasoning and tool calls, how it
+// stopped and what it used — for the Anthropic Messages, OpenAI Responses,
+// Chat Completions and Gemini streams; null for one it can't read.
+function sseReply(events) {
+  const out = {};
+  const blocks = [];      // Anthropic content blocks, Chat tool calls, Responses items, in order
+  const byKey = new Map();
+  const block = (key, init) => { let b = byKey.get(key); if (!b) { b = { ...init }; byKey.set(key, b); blocks.push(b); } return b; };
+  let kind = "";
+  for (const e of events) {
+    const d = jsonOr(e.data);
+    if (!d || typeof d !== "object") continue;
+    const type = d.type || e.event || "";
+    if (d.error) { out.error = d.error; continue; }
+    if (type === "message_start" && d.message) {
+      kind = "anthropic";
+      out.id = d.message.id; out.model = d.message.model;
+      if (d.message.usage) out.usage = { ...d.message.usage };
+    } else if (type === "content_block_start" && d.content_block) {
+      kind = "anthropic";
+      const cb = d.content_block;
+      const b = block("a" + d.index, { type: cb.type });
+      if (cb.type === "tool_use" || cb.type === "server_tool_use") { b.id = cb.id; b.name = cb.name; b.input = ""; }
+      else if (cb.type === "text") b.text = cb.text || "";
+      else if (cb.type === "thinking") b.thinking = cb.thinking || "";
+      else Object.assign(b, cb);
+    } else if (type === "content_block_delta" && d.delta) {
+      const b = block("a" + d.index, { type: "text" });
+      const x = d.delta;
+      if (x.type === "text_delta") b.text = (b.text || "") + x.text;
+      else if (x.type === "thinking_delta") b.thinking = (b.thinking || "") + x.thinking;
+      else if (x.type === "input_json_delta") b.input = (b.input || "") + x.partial_json;
+    } else if (type === "message_delta") {
+      if (d.delta?.stop_reason) out.stop_reason = d.delta.stop_reason;
+      if (d.usage) out.usage = { ...out.usage, ...d.usage };
+    } else if (type.startsWith("response.")) {
+      kind = "responses";
+      if (d.response) {
+        out.id = d.response.id; out.model = d.response.model; out.status = d.response.status;
+        if (d.response.usage) out.usage = d.response.usage;
+        if (d.response.error) out.error = d.response.error;
+        if (d.response.incomplete_details) out.incomplete = d.response.incomplete_details;
+        if (type === "response.completed" && d.response.output?.length) out.output = d.response.output;
+      }
+      const key = "r" + (d.item_id || d.item?.id || d.output_index);
+      if (type === "response.output_item.added" || type === "response.output_item.done") {
+        const it = d.item || {};
+        const b = block(key, { type: it.type });
+        if (it.type === "function_call" || it.type === "custom_tool_call") { b.call_id = it.call_id; b.name = it.name; }
+        if (type === "response.output_item.done") {
+          if (it.arguments !== undefined) b.arguments = it.arguments;
+          if (it.input !== undefined) b.input = it.input;
+          const text = (it.content || []).map((c) => c.text || c.refusal || "").join("");
+          if (text) b.text = text;
+          const sum = (it.summary || []).map((c) => c.text || "").join("\n\n");
+          if (sum) b.summary = sum;
+        }
+      } else if (type === "response.output_text.delta" || type === "response.refusal.delta") {
+        const b = block(key, { type: "message" }); b.text = (b.text || "") + d.delta;
+      } else if (type === "response.reasoning_summary_text.delta") {
+        const b = block(key, { type: "reasoning" }); b.summary = (b.summary || "") + d.delta;
+      } else if (type === "response.reasoning_text.delta") {
+        const b = block(key, { type: "reasoning" }); b.text = (b.text || "") + d.delta;
+      } else if (type === "response.function_call_arguments.delta") {
+        const b = block(key, { type: "function_call" }); b.arguments = (b.arguments || "") + d.delta;
+      } else if (type === "response.custom_tool_call_input.delta") {
+        const b = block(key, { type: "custom_tool_call" }); b.input = (b.input || "") + d.delta;
+      }
+    } else if (Array.isArray(d.choices)) {
+      kind = "chat";
+      if (d.id) out.id = d.id;
+      if (d.model) out.model = d.model;
+      if (d.usage) out.usage = d.usage;
+      for (const c of d.choices) {
+        const x = c.delta || c.message || {};
+        const msg = block("c" + (c.index || 0), { type: "message" });
+        if (typeof x.content === "string") msg.content = (msg.content || "") + x.content;
+        const r = x.reasoning_content ?? x.reasoning;
+        if (typeof r === "string") msg.reasoning = (msg.reasoning || "") + r;
+        for (const tc of x.tool_calls || []) {
+          const b = block("c" + (c.index || 0) + ":" + (tc.index ?? tc.id), { type: "tool_call" });
+          if (tc.id) b.id = tc.id;
+          if (tc.function?.name) b.name = (b.name || "") + tc.function.name;
+          if (tc.function?.arguments) b.arguments = (b.arguments || "") + tc.function.arguments;
+        }
+        if (c.finish_reason) out.finish_reason = c.finish_reason;
+      }
+    } else if (Array.isArray(d.candidates)) {
+      kind = "gemini";
+      if (d.modelVersion) out.model = d.modelVersion;
+      if (d.usageMetadata) out.usage = d.usageMetadata;
+      for (const c of d.candidates) {
+        for (const p of c.content?.parts || []) {
+          if (typeof p.text === "string") {
+            const b = block("g" + (c.index || 0) + (p.thought ? "t" : ""), { type: p.thought ? "thought" : "text" });
+            b.text = (b.text || "") + p.text;
+          } else if (p.functionCall) blocks.push({ type: "functionCall", ...p.functionCall });
+        }
+        if (c.finishReason) out.finishReason = c.finishReason;
+      }
+    }
+  }
+  if (!kind && !out.error) return null;
+  // the Responses API's own finished output is the reply, when it came
+  const content = (out.output || blocks).filter((b) => !(kind === "chat" && b.type === "message" && !b.content && !b.reasoning));
+  // a tool's arguments read as the object they spell, when they are whole
+  for (const b of content) {
+    for (const k of ["input", "arguments"]) {
+      if (typeof b[k] !== "string") continue;
+      const v = b[k] === "" && k === "input" ? {} : jsonOr(b[k]);
+      if (v !== undefined) b[k] = v;
+    }
+  }
+  const reply = {};
+  for (const k of ["id", "model", "status"]) if (out[k] !== undefined) reply[k] = out[k];
+  if (content.length) reply[{ anthropic: "content", responses: "output", gemini: "parts" }[kind] || "choices"] = content;
+  for (const k of ["stop_reason", "finish_reason", "finishReason", "incomplete", "usage", "error"]) if (out[k] !== undefined) reply[k] = out[k];
+  return reply;
+}
+
+// The data of each event, as JSON where it is JSON, under its name.
+function sseEventNode(e) {
+  const box = el("span", "sse-ev");
+  if (e.event) box.append(el("span", "sse-name", "event: " + e.event + "\n"));
+  box.append(sseData(e.data));
+  return box;
+}
+function sseData(data) {
+  const d = jsonOr(data);
+  return d !== null && typeof d === "object" ? JSON.stringify(d, null, 2) : data; // [DONE] as it is
+}
+const SSE_PAGE = 200; // events drawn at a time: a long stream stays quick to open
+
+function sseBodyPanel(label, raw, truncated, id) {
+  const events = parseSSE(raw);
+  if (!events) return null;
+  const reply = sseReply(events);
+  const panel = el("section", "call-body sse");
+  const head = el("div", "call-body-head");
+  head.append(el("span", "call-body-label", t(label)));
+  if (truncated) head.append(el("span", "call-body-truncated", t("first 256 KB")));
+  const views = [["reply", t("Reply")], ["events", t("Events")], ["raw", t("Raw")]].filter(([v]) => v !== "reply" || reply);
+  let view = views.some(([v]) => v === sseView) ? sseView : "events";
+  const count = el("span", "call-body-count", t(events.length === 1 ? "1 event" : "{n} events", { n: events.length }));
+  const pick = segs(views, view, (v) => { view = sseView = v; try { localStorage.setItem("magpie.sseView", v); } catch {} draw(); });
+  pick.classList.add("sse-views");
+  const copyB = copyBtn("", t(label)); // what it copies is set below
+  head.append(count, el("span", "grow"), pick, copyB);
+  panel.append(head);
+  const pre = el("pre");
+  // a long stream's events come a page at a time; what draws more sits
+  // under the box, where it stays as they come in rather than at the end
+  // of what is drawn
+  const foot = el("div", "call-body-foot");
+  const shownNote = el("span");
+  const moreB = el("button", "link", "");
+  foot.append(shownNote, el("span", "grow"), moreB);
+  panel.append(pre, foot);
+  let code = null, shown = 0;
+  const more = () => {
+    const upto = Math.min(events.length, Math.max(sseShown.get(id) || 0, shown + SSE_PAGE));
+    for (; shown < upto; shown++) code.append(sseEventNode(events[shown]));
+    if (shown > SSE_PAGE) sseShown.set(id, shown);
+    foot.hidden = view !== "events" || shown >= events.length;
+    shownNote.textContent = t("{n} of {total} events shown", { n: shown, total: events.length });
+    moreB.textContent = t("Show {n} more events", { n: Math.min(SSE_PAGE, events.length - shown) });
+  };
+  moreB.onclick = (ev) => { ev.stopPropagation(); more(); };
+  const draw = () => {
+    // the box keeps its height across a switch, so what is below it, and
+    // the page, stay where they are
+    if (pre.isConnected) pre.style.minHeight = pre.offsetHeight + "px";
+    code = el("code");
+    pre.replaceChildren(code);
+    pre.scrollTop = 0;
+    shown = 0;
+    if (view === "reply") code.textContent = JSON.stringify(reply, null, 2);
+    else if (view === "raw") code.textContent = raw;
+    if (view === "events") more(); else foot.hidden = true;
+  };
+  // what is copied is what is shown: the reply, every event, or the body
+  copyB.onclick = (ev) => {
+    ev.stopPropagation();
+    const text = view === "reply" ? JSON.stringify(reply, null, 2) : view === "raw" ? raw
+      : events.map((e) => (e.event ? "event: " + e.event + "\n" : "") + sseData(e.data)).join("\n\n");
+    copy(text, t(label), copyB);
+  };
+  draw();
+  return panel;
+}
+
+function callBodyPanel(label, raw, truncated, id) {
+  if (id) {
+    const sse = sseBodyPanel(label, raw, truncated, id);
+    if (sse) return sse;
+  }
   const panel = el("section", "call-body");
   const head = el("div", "call-body-head");
   head.append(el("span", "call-body-label", t(label)));
@@ -2864,6 +3088,9 @@ function callBodyPanel(label, raw, truncated) {
 function renderActivity() {
   const g = providers.gateway;
   const box = $("#activity");
+  // a body being read keeps its place as new calls come in
+  const kept = new Map();
+  for (const item of box.querySelectorAll(".call-item[data-id]")) kept.set(item.dataset.id, [...item.querySelectorAll("pre")].map((p) => p.scrollTop));
   box.replaceChildren();
   $("#callsNote").textContent = g.running && !g.mine ? t("shown by the magpie that serves the gateway") : "";
   const calls = g.calls.slice(0, 20);
@@ -2899,11 +3126,16 @@ function renderActivity() {
       const details = el("div", "call-details");
       details.append(
         callBodyPanel("Request Body", c.requestBody, c.requestTruncated),
-        callBodyPanel("Response Body", c.responseBody, c.responseTruncated),
+        callBodyPanel("Response Body", c.responseBody, c.responseTruncated, id),
       );
+      item.dataset.id = id;
       item.append(details);
     }
     box.append(item);
+  }
+  for (const item of box.querySelectorAll(".call-item[data-id]")) {
+    const tops = kept.get(item.dataset.id) || [];
+    item.querySelectorAll("pre").forEach((p, i) => { if (tops[i]) p.scrollTop = tops[i]; });
   }
 }
 
@@ -7211,9 +7443,15 @@ function ledTime(when) {
   return d.toLocaleString(locale === "zh" ? "zh-CN" : "en", opts);
 }
 // the model the reply named: amber, as the Routing page's tag, when it is
-// another than the one sent; plain when it is that one under a dated name
+// another than the one sent; plain when it is that one under a dated name,
+// or the member a remote magpie's routing group sent it to, said in its title
 function ledServed(r) {
   if (!r.served) return el("span", "faint", "—");
+  if (r.routed && !r.swapped) {
+    const k = el("span", "muted routed", r.served);
+    k.title = window.routedWhy ? window.routedWhy({ model: r.model, served: r.served }) : "";
+    return k;
+  }
   if (!r.swapped) return el("span", "muted", r.served);
   const k = el("span", "swap", r.served);
   k.title = window.swapWhy ? window.swapWhy({ model: r.model, served: r.served }) : "";

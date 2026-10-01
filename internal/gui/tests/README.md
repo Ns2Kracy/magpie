@@ -98,6 +98,15 @@ small model, which doesn't follow the model, stays a picker.
 scrolled: its fields hide, the head keeps the base URL and a copy button, the
 head stays where it was, and the fold is remembered across a reload.
 
+`sse-body.test.cjs` opens streamed replies in the Gateway page's recent
+calls (Anthropic Messages, Chat Completions with `[DONE]`, OpenAI Responses cut
+before it completed): the response body reads as each event's data
+pretty-printed under its name, as the reply put together (text, reasoning, tool
+calls with their arguments as objects, how it stopped, usage) or as it came,
+the pick remembered. A 450-event stream draws 200 at a time from a button under
+the box that stays where it is, the page too; a body that isn't a stream is as
+before. English and Chinese, Chromium and WebKit.
+
 `routing-kind.test.cjs` lists calls Codex makes for itself (a guardian review,
 a title, memories, a turn on Luna Reserve, a kind it does not know yet): each
 has a grey tag by its model in the Requests list, in English and Chinese, the
@@ -138,6 +147,15 @@ under the model's dated name and ones naming none: only the first is marked
 "served gpt-6-luna" by its answer in the Requests list and "requested
 gpt-6-sol · served gpt-6-luna" in its story, in English and Chinese, and the
 click that picks it leaves the page where it is.
+
+`remote-group-served.test.cjs` lists a request sent to a remote magpie for one
+of its routing groups (group/auto-deepseek-v4-1-flash answered by
+deepseek/deepseek-v4.1-flash) beside a real swap: the group's member is shown
+plain, not amber, in the Routing page's Requests list, with a title (and a
+line in its story) saying the remote magpie's group routed the request there,
+and muted with the same title in the Usage page's Requests, while the swap
+stays amber; Chromium and WebKit, English and Chinese, and the click that
+picks it leaves the page where it is.
 
 `routing-reroute-title.test.cjs` lists a request the plan's account rate
 limited and a relay took, and one answered on its first try: the rerouted
@@ -615,7 +633,7 @@ with `/api/plugins` faked.
 With Node.js and Playwright available:
 
 ```sh
-node --test internal/gui/tests/menu-scroll.test.cjs internal/gui/tests/click-scroll.test.cjs internal/gui/tests/panel-fold.test.cjs internal/gui/tests/rollup-short.test.cjs internal/gui/tests/panel-routing.test.cjs internal/gui/tests/gateway-fold.test.cjs internal/gui/tests/routing-kind.test.cjs internal/gui/tests/balance-fix.test.cjs internal/gui/tests/cli-update.test.cjs internal/gui/tests/login-import.test.cjs internal/gui/tests/agy-launch.test.cjs internal/gui/tests/currency.test.cjs internal/gui/tests/usage-ledger.test.cjs internal/gui/tests/update-check.test.cjs internal/gui/tests/omarchy.test.cjs internal/gui/tests/brand.test.cjs internal/gui/tests/library-loading.test.cjs node --test internal/gui/tests/signin-callback.test.cjs internal/gui/tests/routing-steady.test.cjs internal/gui/tests/old-webkit.test.cjs internal/gui/tests/session-terminal.test.cjs internal/gui/tests/text-size.test.cjs internal/gui/tests/zcode-site.test.cjs internal/gui/tests/rail-tip.test.cjs internal/gui/tests/sync-update.test.cjs internal/gui/tests/plugin-signin.test.cjs internal/gui/tests/plugin-market.test.cjs internal/gui/tests/s3-sync.test.cjs internal/gui/tests/routing-wb-refused.test.cjs internal/gui/tests/routing-shape.test.cjs internal/gui/tests/market-have.test.cjs internal/gui/tests/sessions-today.test.cjs internal/gui/tests/routing-side-calls.test.cjs internal/gui/tests/import-all-skills.test.cjs internal/gui/tests/routing-flood.test.cjs internal/gui/tests/routing-busy.test.cjs internal/gui/tests/own-skill.test.cjs internal/gui/tests/routing-manual.test.cjs internal/gui/tests/tray-usages.test.cjs internal/gui/tests/provider-remove.test.cjs internal/gui/tests/signin-link.test.cjs internal/gui/tests/tray-inuse.test.cjs internal/gui/tests/codex-auto-reset.test.cjs internal/gui/tests/routing-auto-reset.test.cjs internal/gui/tests/claude-usage-asked.test.cjs internal/gui/tests/claude-risk.test.cjs internal/gui/tests/library-toggle-status.test.cjs internal/gui/tests/library-all.test.cjs internal/gui/tests/routing-reroute-title.test.cjs internal/gui/tests/plain-names.test.cjs internal/gui/tests/panel-effort.test.cjs internal/gui/tests/agent-models-all-hidden.test.cjs internal/gui/tests/omp-roles.test.cjs internal/gui/tests/claude-effort.test.cjs internal/gui/tests/remote-magpie.test.cjs internal/gui/tests/qoder-cn-tile.test.cjs internal/gui/tests/provider-levels-scroll.test.cjs internal/gui/tests/signin-paste-codex.test.cjs internal/gui/tests/usage-alert.test.cjs internal/gui/tests/quota-families.test.cjs internal/gui/tests/provider-search.test.cjs internal/gui/tests/webdav-settings-refresh.test.cjs internal/gui/tests/lan-docker.test.cjs internal/gui/tests/plugin-key-hint.test.cjs internal/gui/tests/update-hide.test.cjs internal/gui/tests/tray-logos.test.cjs internal/gui/tests/routing-proxy.test.cjs
+node --test internal/gui/tests/menu-scroll.test.cjs internal/gui/tests/click-scroll.test.cjs internal/gui/tests/panel-fold.test.cjs internal/gui/tests/rollup-short.test.cjs internal/gui/tests/panel-routing.test.cjs internal/gui/tests/gateway-fold.test.cjs internal/gui/tests/routing-kind.test.cjs internal/gui/tests/balance-fix.test.cjs internal/gui/tests/cli-update.test.cjs internal/gui/tests/login-import.test.cjs internal/gui/tests/agy-launch.test.cjs internal/gui/tests/currency.test.cjs internal/gui/tests/usage-ledger.test.cjs internal/gui/tests/update-check.test.cjs internal/gui/tests/omarchy.test.cjs internal/gui/tests/brand.test.cjs internal/gui/tests/library-loading.test.cjs node --test internal/gui/tests/signin-callback.test.cjs internal/gui/tests/routing-steady.test.cjs internal/gui/tests/old-webkit.test.cjs internal/gui/tests/session-terminal.test.cjs internal/gui/tests/text-size.test.cjs internal/gui/tests/zcode-site.test.cjs internal/gui/tests/rail-tip.test.cjs internal/gui/tests/sync-update.test.cjs internal/gui/tests/plugin-signin.test.cjs internal/gui/tests/plugin-market.test.cjs internal/gui/tests/s3-sync.test.cjs internal/gui/tests/routing-wb-refused.test.cjs internal/gui/tests/routing-shape.test.cjs internal/gui/tests/market-have.test.cjs internal/gui/tests/sessions-today.test.cjs internal/gui/tests/routing-side-calls.test.cjs internal/gui/tests/import-all-skills.test.cjs internal/gui/tests/routing-flood.test.cjs internal/gui/tests/routing-busy.test.cjs internal/gui/tests/own-skill.test.cjs internal/gui/tests/routing-manual.test.cjs internal/gui/tests/tray-usages.test.cjs internal/gui/tests/provider-remove.test.cjs internal/gui/tests/signin-link.test.cjs internal/gui/tests/tray-inuse.test.cjs internal/gui/tests/codex-auto-reset.test.cjs internal/gui/tests/routing-auto-reset.test.cjs internal/gui/tests/claude-usage-asked.test.cjs internal/gui/tests/claude-risk.test.cjs internal/gui/tests/library-toggle-status.test.cjs internal/gui/tests/library-all.test.cjs internal/gui/tests/routing-reroute-title.test.cjs internal/gui/tests/plain-names.test.cjs internal/gui/tests/panel-effort.test.cjs internal/gui/tests/agent-models-all-hidden.test.cjs internal/gui/tests/omp-roles.test.cjs internal/gui/tests/claude-effort.test.cjs internal/gui/tests/remote-magpie.test.cjs internal/gui/tests/qoder-cn-tile.test.cjs internal/gui/tests/provider-levels-scroll.test.cjs internal/gui/tests/signin-paste-codex.test.cjs internal/gui/tests/usage-alert.test.cjs internal/gui/tests/quota-families.test.cjs internal/gui/tests/provider-search.test.cjs internal/gui/tests/webdav-settings-refresh.test.cjs internal/gui/tests/lan-docker.test.cjs internal/gui/tests/plugin-key-hint.test.cjs internal/gui/tests/update-hide.test.cjs internal/gui/tests/tray-logos.test.cjs internal/gui/tests/routing-proxy.test.cjs internal/gui/tests/sse-body.test.cjs internal/gui/tests/remote-group-served.test.cjs
 ```
 
 If Playwright is installed outside the repository, set `NODE_PATH` to the

@@ -1204,6 +1204,17 @@ body.window .ag-sk-icon { width: 22px; height: 22px; border-radius: 6px; }
 .call-body code { display: block; font: 10.5px/1.5 var(--code); color: var(--fg-2); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; tab-size: 2; }
 .call-body code.empty { color: var(--faint); font-family: var(--font); }
 @media (max-width: 760px) { .call-details { grid-template-columns: 1fr; } }
+/* a streamed reply: read as its reply, its events or as it came */
+.call-body-count { font-size: 9.5px; color: var(--faint); white-space: nowrap; }
+.call-body-head .sse-views { align-self: center; padding: 1.5px; border-radius: 6px; }
+.call-body-head .sse-views .opt { height: 19px; padding: 0 8px; font-size: 10.5px; }
+.call-body-head .sse-views .thumb { top: 1.5px; bottom: 1.5px; }
+.sse-ev { display: block; }
+.sse-ev + .sse-ev { margin-top: 9px; padding-top: 9px; border-top: 1px dashed var(--line-2); }
+.sse-name { color: var(--muted); }
+.call-body-foot { height: 27px; padding: 0 6px 0 10px; display: flex; align-items: center; gap: 7px; border-top: 1px solid var(--line-2); font-size: 10.5px; color: var(--muted); }
+.call-body-foot[hidden] { display: none; }
+.call-body-foot .link { font-size: 11px; }
 
 /* ---- providers page ------------------------------------------------------- */
 .provider .chev { color: var(--faint); display: inline-flex; transition: transform .15s; }

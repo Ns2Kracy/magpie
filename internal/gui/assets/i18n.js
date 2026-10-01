@@ -881,6 +881,13 @@ const I18N = {
     "Response Body": "响应体",
     "No body captured": "未捕获到内容",
     "first 256 KB": "前 256 KB",
+    "Reply": "回复",
+    "Events": "事件",
+    "Raw": "原文",
+    "1 event": "1 个事件",
+    "{n} events": "{n} 个事件",
+    "{n} of {total} events shown": "已显示 {n} / {total} 个事件",
+    "Show {n} more events": "再显示 {n} 个事件",
 
     // usage
     "Today": "今天",
@@ -1545,6 +1552,7 @@ const I18N = {
     "{n} tok/s": "{n} token/秒",
     "requested {sent} · served {served}": "请求 {sent} · 实际 {served}",
     "served {served}": "实际 {served}",
+    "{sent} is a routing group of the remote magpie, and it routed the request to {served}: the group picking one of its models, not the vendor swapping the model.": "{sent} 是远程 magpie 的路由组，它把请求路由给了 {served}：这是路由组在挑选组内模型，并不是服务商换了模型。",
     "Open Routing": "打开路由",
     "The vendor was asked for {sent}, and its reply says {served} answered it: another model, not just {sent} under a dated name.": "向服务商请求的是 {sent}，但它的回复写明由 {served} 作答：这是另一个模型，而不只是 {sent} 带日期的版本名。",
     "{n} min": "{n} 分钟",

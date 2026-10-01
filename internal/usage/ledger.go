@@ -21,10 +21,13 @@ import (
 type Row struct {
 	Record
 	// Cost is the call's price in USD, when its model's is known
-	// (Priced); Swapped: the reply named another model than Model
+	// (Priced); Swapped: the reply named another model than Model;
+	// Routed: Model is another magpie's routing group, and Served the
+	// member it routed the call to (GroupRouted)
 	Cost    float64 `json:"cost"`
 	Priced  bool    `json:"priced"`
 	Swapped bool    `json:"swapped,omitempty"`
+	Routed  bool    `json:"routed,omitempty"`
 }
 
 // Filter narrows the ledger: to one agent (its id, as AgentOf gives it),
@@ -128,7 +131,8 @@ func ledger(since time.Time, f Filter, recs []Record) (rows []Row, sum Totals, a
 		}
 		pr := priceOf(r)
 		sum.add(r, pr)
-		row := Row{Record: r, Swapped: r.Served != "" && Swapped(provider.SentNameIn(wires, r.Provider, r.Model, r.Effort), r.Served)}
+		sent := provider.SentNameIn(wires, r.Provider, r.Model, r.Effort)
+		row := Row{Record: r, Swapped: r.Served != "" && Swapped(sent, r.Served), Routed: GroupRouted(sent, r.Served)}
 		if pr != nil && r.Input+r.Output > 0 {
 			row.Cost, row.Priced = pr.Cost(r.Input, r.Output, r.CacheRead, r.CacheWrite), true
 		}

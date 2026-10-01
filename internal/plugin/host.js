@@ -120,8 +120,21 @@ globalThis.fetch = Object.assign(function fetch(input, init) {
 // ---- auth.json ---------------------------------------------------------------
 
 function readAuth() {
+  let text
+  for (let i = 0; ; i++) {
+    try {
+      text = fs.readFileSync(authPath, "utf8")
+      break
+    } catch (e) {
+      if (e?.code === "ENOENT") return {}
+      // Windows refuses a file being renamed over for a moment: read as
+      // none, the next setAuth would write the others' accounts away
+      if (i >= 50) throw e
+      pause(10)
+    }
+  }
   try {
-    const v = JSON.parse(fs.readFileSync(authPath, "utf8"))
+    const v = JSON.parse(text)
     return v && typeof v === "object" ? v : {}
   } catch {
     return {}
@@ -132,7 +145,19 @@ function writeAuth(all) {
   fs.mkdirSync(path.dirname(authPath), { recursive: true })
   const tmp = authPath + ".tmp-" + process.pid
   fs.writeFileSync(tmp, JSON.stringify(all, null, 2) + "\n", { mode: 0o600 })
-  fs.renameSync(tmp, authPath)
+  // and a file held open by a reader refuses to be renamed over
+  for (let i = 0; ; i++) {
+    try {
+      return fs.renameSync(tmp, authPath)
+    } catch (e) {
+      if (i >= 50 || !["EPERM", "EACCES", "EBUSY"].includes(e?.code)) throw e
+      pause(10)
+    }
+  }
+}
+
+function pause(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
 
 function setAuth(key, info) {
