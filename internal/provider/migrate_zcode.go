@@ -20,13 +20,13 @@ import (
 func init() {
 	movers["zcode"] = &mover{
 		pkg:    "@magpie-community/opencode-zcode-auth",
-		min:    "0.1.2", // ZCode's own sign-in read where ZCode keeps it
+		min:    "0.1.5", // a failure's status and its sign-in mark as the built-in's; MCP quota set aside as the built-in's
 		agents: []string{"zcode"},
 		out: func() ([]Moving, error) {
 			var out []Moving
 			for _, l := range zcodeLogins() {
 				// the own account's copy goes back to nothing: ZCode keeps it
-				out = append(out, Moving{User: l.User, First: l.Active, On: l.On, Lapsed: l.Lapsed != "", Own: l.Own, Auth: zcodeOut(l.User, l.Plan, l.key, l.Own)})
+				out = append(out, Moving{User: l.User, First: l.Active, On: l.On, Lapsed: l.Lapsed != "", Plan: l.Plan, Own: l.Own, Auth: zcodeOut(l.User, l.Plan, l.key, l.Own)})
 			}
 			return out, nil
 		},

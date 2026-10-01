@@ -35,7 +35,9 @@ func sideLogins(agent, ownUser string, usable func(savedLogin) bool) []sideLogin
 	loginsMu.Lock()
 	defer loginsMu.Unlock()
 	ls := readLogins()
-	if ownUser != "" {
+	// moved onto its plugin, the agent's own sign-in is the plugin's: its
+	// row, set aside, is kept for going back
+	if ownUser != "" && !movedAgent(agent) {
 		found := false
 		for i := range ls {
 			if ls[i].Agent == agent && ls[i].own() {

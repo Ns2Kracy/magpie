@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/yetone/magpie/internal/catalog"
+	"github.com/yetone/magpie/internal/plugin"
 	"github.com/yetone/magpie/internal/settings"
 )
 
@@ -42,7 +43,12 @@ func (p Provider) Available() []catalog.Model {
 			}
 		}
 	}
-	if live, _, ok := catalog.Live(p.ID); ok {
+	if live, _, ok := p.live(); ok {
+		if p.Account != nil && p.Account.unusable != nil {
+			// a model the list offers that the account was refused
+			// (Copilot's, copilot_refused.go)
+			live = slices.DeleteFunc(slices.Clone(live), func(m catalog.Model) bool { return p.Account.unusable(m.ID) })
+		}
 		switch p.ID {
 		case "cursor":
 			live = withoutCursorCapacity(collapseCursorModels(withCursorContexts(live)))
@@ -90,8 +96,27 @@ func (p Provider) firstCatalog() string {
 
 // Fetched reports when the vendor's own list was last fetched.
 func (p Provider) Fetched() (time.Time, bool) {
-	_, t, ok := catalog.Live(p.ID)
+	_, t, ok := p.live()
 	return t, ok
+}
+
+// Listed is when the models listed now were had from the vendor: fetched
+// for a built-in, listed by its plugin for a plugin's.
+func (p Provider) Listed() (time.Time, bool) {
+	if p.IsPlugin() {
+		return plugin.ListedAt()
+	}
+	return p.Fetched()
+}
+
+// live is the list last fetched from the vendor. A plugin's provider has
+// none: its models are what the plugin lists now, and a built-in moved
+// onto it left its own last list under the same id.
+func (p Provider) live() ([]catalog.Model, time.Time, bool) {
+	if p.IsPlugin() {
+		return nil, time.Time{}, false
+	}
+	return catalog.Live(p.ID)
 }
 
 // Fetch asks the vendor which models it serves and remembers the answer.
@@ -170,7 +195,7 @@ func (p Provider) fetchOne(ctx context.Context) ([]catalog.Model, string, error)
 	if u := strings.TrimSpace(p.ModelsURL); u != "" {
 		// asked where the user said, and nowhere else: the base URLs
 		// list nothing, or the wrong thing
-		ms, err := catalog.FetchURL(ctx, u, p.Key, p.Chat == "" && p.Responses == "", p.Headers)
+		ms, err := catalog.FetchURL(ctx, u, p.Key, p.Chat == "" && p.Responses == "", p.listHeaders())
 		if err != nil {
 			return nil, u, err
 		}
@@ -183,7 +208,7 @@ func (p Provider) fetchOne(ctx context.Context) ([]catalog.Model, string, error)
 	var errs []string
 	for _, proto := range p.Speaks() {
 		base := p.Base(proto)
-		ms, at, err := catalog.FetchAt(ctx, base, p.Key, proto == Anthropic, p.Headers)
+		ms, at, err := catalog.FetchAt(ctx, base, p.Key, proto == Anthropic, p.listHeaders())
 		if err == nil {
 			if proto != Anthropic {
 				base = p.fixV1(base, at)
@@ -410,8 +435,16 @@ func (p Provider) Exposed() []catalog.Model {
 		}
 		return out
 	}
-	if len(p.Models) > 0 {
-		return pick(p.Models)
+	picks := p.Models
+	if _, _, ok := p.live(); ok && p.Account != nil && p.Account.unusable != nil {
+		// A Copilot account is served what its list offers it, less what
+		// it was refused: a pick its list doesn't have (#371: gpt-6-luna,
+		// not in a Student plan's) or that it was refused is left out;
+		// with none left, as if none were picked.
+		picks = slices.DeleteFunc(slices.Clone(picks), func(id string) bool { _, ok := byID[id]; return !ok })
+	}
+	if len(picks) > 0 {
+		return pick(picks)
 	}
 	// another magpie's list is already the models its user exposed
 	if len(avail) <= manyModels || p.IsRemoteMagpie() {
