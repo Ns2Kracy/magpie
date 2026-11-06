@@ -19,6 +19,14 @@ clone a working tree or synchronize arbitrary files.
   403 SignatureDoesNotMatch once a sync had an ETag to ask with. [`github.go`](../../internal/davsync/github.go)
   interprets `github://owner/repo[/prefix]`, with `Config.Branch` selecting a
   branch or using the repository's default.
+- R2 endpoints with a path retain the existing object URLs: `newS3`
+  treats the path as an object-key prefix and sends bucket listings to
+  the account root, including that prefix in `ListObjectsV2`. Earlier
+  versions could read and write the setup and usage files at those URLs,
+  but sent the usage listing to an object path and received `404 NoSuchKey`.
+  No object is moved, no saved sync state is reset, and other S3 services'
+  reverse-proxy base paths are unchanged. With path-style addressing, a
+  bucket named in the R2 endpoint must match the configured bucket.
 - [`backup.go`](../../internal/backup/backup.go) owns bundle contents and
   sealing. Sync divides the setup into providers, settings, profiles, agents
   and library. Provider keys, agent models, library and usage have their own

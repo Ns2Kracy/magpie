@@ -76,6 +76,21 @@ func newS3(c Config) (*s3, error) {
 	if net.ParseIP(host) != nil || !strings.Contains(host, ".") || e.Scheme == "https" && strings.Contains(s.bucket, ".") {
 		s.pathStyle = true
 	}
+	if strings.HasSuffix(strings.ToLower(host), ".r2.cloudflarestorage.com") && e.Path != "" {
+		// R2 has no proxy base path: a path here is part of the object
+		// name. Keep existing objects where they are, but list at the
+		// bucket root with that path included in the listing's prefix.
+		prefix := strings.TrimPrefix(e.Path, "/")
+		if s.pathStyle {
+			bucket, rest, _ := strings.Cut(prefix, "/")
+			if bucket != s.bucket {
+				return nil, fmt.Errorf("the R2 endpoint names bucket %s, not %s: use the account endpoint without a path", bucket, s.bucket)
+			}
+			prefix = strings.TrimPrefix(rest+"/"+s.bucket, "/")
+		}
+		s.key = prefix + "/" + s.key
+		e.Path, e.RawPath = "", ""
+	}
 	return s, nil
 }
 
